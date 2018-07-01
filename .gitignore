@@ -10,3 +10,22 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# IDE generated files
+.idea/
+*.iml
+
+# default output directories
+target/
+classes/
+deploy/
+javadoc/
+out/
+log/
+cashe/
+
+# default application storage directory used by the IDE Performance Cache feature
+.data/
+
+# used for ADF styles caching
+temp/
