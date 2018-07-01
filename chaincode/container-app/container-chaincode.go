@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"errors"
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	sc "github.com/hyperledger/fabric/protos/peer"
@@ -37,13 +39,15 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 }
 
 func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
-
+	var A, B string
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
-	containerAsBytes, _ := json.Marshal(args[1])
+	A = args[0]
+	B += args[1] + "_" + args[2] + "_" + args[3]
+	fmt.Printf("addRecord Params:%s\n", B)
 
-	err:=APIstub.PutState(args[0],containerAsBytes)
+	err:=APIstub.PutState(args[0],B)
 	if err != nil{
 		return shim.Error("wirteIn error")
 	}
@@ -52,7 +56,7 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 }
 
 func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
-
+	var A
 	if len(args) != 2 {
 		return shim.Error("Incorrect number of arguments. Expecting 2")
 	}
@@ -61,6 +65,8 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 	if containerAsBytes == nil {
 		return shim.Error("Could not locate container")
 	}
+	fmt.Printf("Query Response:%s\n", containerAsBytes)
+
 	return shim.Success(containerAsBytes)
 }  
 
