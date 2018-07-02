@@ -50,7 +50,7 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	containerAsBytes, _ := APIstub.GetState(args[0])
 	if containerAsBytes == nil {
-		// 如果key不存在
+		// If key not found
 		fmt.Println("Key Not Found, Add New Record")
 		paramMap := make(map[string]interface{})
 		param += args[2] + "_" + args[3]
@@ -66,12 +66,13 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 			return shim.Error("wirteIn error")
 		}
 	} else{
-		// 如果key存在
+		// If key found
 		fmt.Println("Key Found, Get Old Value")
 		var dat map[string]interface{}
 		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
 			fmt.Println("Old Value: ")
 			fmt.Print(dat)
+			fmt.Println()
 			param += args[2] + "_" + args[3]
 			dat[args[1]] = param
 			str, err := json.Marshal(dat)
@@ -111,10 +112,9 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 		fmt.Println(err)
 	}
 	var value string
-	// 查找键值是否存在
+	// Judge key is found or not
 	if v, ok := dat[args[1]]; ok {
 		value = v.(string)
-		fmt.Println("Key Found\t" + v.(string))
 		fmt.Println("Key Found\t" + value)
 	} else {
 		fmt.Println("Key Not Found")
@@ -124,7 +124,7 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	fmt.Printf("Query Response:%s\n", res[0])
 
-	return shim.Success(containerAsBytes)
+	return shim.Success(res[0])
 }
 
 func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
