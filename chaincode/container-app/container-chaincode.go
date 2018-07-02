@@ -51,7 +51,7 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 	containerAsBytes, _ := APIstub.GetState(args[0])
 	if containerAsBytes == nil {
 		// 如果key不存在
-		fmt.Println("Key Not Found， Add New Record")
+		fmt.Println("Key Not Found, Add New Record")
 		paramMap := make(map[string]interface{})
 		param += args[2] + "_" + args[3]
 		paramMap[args[1]] = param
@@ -67,13 +67,13 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 		}
 	} else{
 		// 如果key存在
+		fmt.Println("Key Found, Get Old Value")
 		var dat map[string]interface{}
 		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-			fmt.Println(dat)
-			paramMap := make(map[string]interface{})
+			fmt.Println("Old Value: " + dat)
 			param += args[2] + "_" + args[3]
-			paramMap[args[1]] = param
-			str, err := json.Marshal(paramMap)
+			dat[args[1]] = param
+			str, err := json.Marshal(dat)
 			if err != nil {
 				fmt.Println(err)
 			}
