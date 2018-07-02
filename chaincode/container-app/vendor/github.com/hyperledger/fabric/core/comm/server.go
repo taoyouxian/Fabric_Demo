@@ -9,91 +9,39 @@ package comm
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc"
 )
 
-//A SecureServerConfig structure is used to configure security (e.g. TLS) for a
-//GRPCServer instance
-type SecureServerConfig struct {
-	//PEM-encoded X509 public key to be used by the server for TLS communication
-	ServerCertificate []byte
-	//PEM-encoded private key to be used by the server for TLS communication
-	ServerKey []byte
-	//Set of PEM-encoded X509 certificate authorities to optionally send
-	//as part of the server handshake
-	ServerRootCAs [][]byte
-	//Set of PEM-encoded X509 certificate authorities to use when verifying
-	//client certificates
-	ClientRootCAs [][]byte
-	//Whether or not to use TLS for communication
-	UseTLS bool
-	//Whether or not TLS client must present certificates for authentication
-	RequireClientCert bool
-}
-
-//GRPCServer defines an interface representing a GRPC-based server
-type GRPCServer interface {
-	//Address returns the listen address for the GRPCServer
-	Address() string
-	//Start starts the underlying grpc.Server
-	Start() error
-	//Stop stops the underlying grpc.Server
-	Stop()
-	//Server returns the grpc.Server instance for the GRPCServer
-	Server() *grpc.Server
-	//Listener returns the net.Listener instance for the GRPCServer
-	Listener() net.Listener
-	//ServerCertificate returns the tls.Certificate used by the grpc.Server
-	ServerCertificate() tls.Certificate
-	//TLSEnabled is a flag indicating whether or not TLS is enabled for this
-	//GRPCServer instance
-	TLSEnabled() bool
-	//AppendClientRootCAs appends PEM-encoded X509 certificate authorities to
-	//the list of authorities used to verify client certificates
-	AppendClientRootCAs(clientRoots [][]byte) error
-	//RemoveClientRootCAs removes PEM-encoded X509 certificate authorities from
-	//the list of authorities used to verify client certificates
-	RemoveClientRootCAs(clientRoots [][]byte) error
-	//SetClientRootCAs sets the list of authorities used to verify client
-	//certificates based on a list of PEM-encoded X509 certificate authorities
-	SetClientRootCAs(clientRoots [][]byte) error
-}
-
-type grpcServerImpl struct {
-	//Listen address for the server specified as hostname:port
+type GRPCServer struct {
+	// Listen address for the server specified as hostname:port
 	address string
-	//Listener for handling network requests
+	// Listener for handling network requests
 	listener net.Listener
-	//GRPC server
+	// GRPC server
 	server *grpc.Server
-	//Certificate presented by the server for TLS communication
-	serverCertificate tls.Certificate
-	//Key used by the server for TLS communication
+	// Certificate presented by the server for TLS communication
+	// stored as an atomic reference
+	serverCertificate atomic.Value
+	// Key used by the server for TLS communication
 	serverKeyPEM []byte
-	//List of certificate authorities to optionally pass to the client during
-	//the TLS handshake
-	serverRootCAs []tls.Certificate
-	//lock to protect concurrent access to append / remove
+	// lock to protect concurrent access to append / remove
 	lock *sync.Mutex
-	//Set of PEM-encoded X509 certificate authorities used to populate
-	//the tlsConfig.ClientCAs indexed by subject
+	// Set of PEM-encoded X509 certificate authorities used to populate
+	// the tlsConfig.ClientCAs indexed by subject
 	clientRootCAs map[string]*x509.Certificate
-	//TLS configuration used by the grpc server
+	// TLS configuration used by the grpc server
 	tlsConfig *tls.Config
-	//Is TLS enabled?
-	tlsEnabled bool
 }
 
-//NewGRPCServer creates a new implementation of a GRPCServer given a
-//listen address.
-func NewGRPCServer(address string, secureConfig SecureServerConfig) (GRPCServer, error) {
-
+// NewGRPCServer creates a new implementation of a GRPCServer given a
+// listen address
+func NewGRPCServer(address string, serverConfig ServerConfig) (*GRPCServer, error) {
 	if address == "" {
 		return nil, errors.New("Missing address parameter")
 	}
@@ -103,16 +51,13 @@ func NewGRPCServer(address string, secureConfig SecureServerConfig) (GRPCServer,
 	if err != nil {
 		return nil, err
 	}
-
-	return NewGRPCServerFromListener(lis, secureConfig)
-
+	return NewGRPCServerFromListener(lis, serverConfig)
 }
 
-//NewGRPCServerFromListener creates a new implementation of a GRPCServer given
-//an existing net.Listener instance.
-func NewGRPCServerFromListener(listener net.Listener, secureConfig SecureServerConfig) (GRPCServer, error) {
-
-	grpcServer := &grpcServerImpl{
+// NewGRPCServerFromListener creates a new implementation of a GRPCServer given
+// an existing net.Listener instance using default keepalive
+func NewGRPCServerFromListener(listener net.Listener, serverConfig ServerConfig) (*GRPCServer, error) {
+	grpcServer := &GRPCServer{
 		address:  listener.Addr().String(),
 		listener: listener,
 		lock:     &sync.Mutex{},
@@ -120,28 +65,34 @@ func NewGRPCServerFromListener(listener net.Listener, secureConfig SecureServerC
 
 	//set up our server options
 	var serverOpts []grpc.ServerOption
-	//check secureConfig
-	if secureConfig.UseTLS {
+	//check SecOpts
+	secureConfig := serverConfig.SecOpts
+	if secureConfig != nil && secureConfig.UseTLS {
 		//both key and cert are required
-		if secureConfig.ServerKey != nil && secureConfig.ServerCertificate != nil {
-			grpcServer.tlsEnabled = true
+		if secureConfig.Key != nil && secureConfig.Certificate != nil {
 			//load server public and private keys
-			cert, err := tls.X509KeyPair(secureConfig.ServerCertificate, secureConfig.ServerKey)
+			cert, err := tls.X509KeyPair(secureConfig.Certificate, secureConfig.Key)
 			if err != nil {
 				return nil, err
 			}
-			grpcServer.serverCertificate = cert
+			grpcServer.serverCertificate.Store(cert)
 
 			//set up our TLS config
-
+			if len(secureConfig.CipherSuites) == 0 {
+				secureConfig.CipherSuites = DefaultTLSCipherSuites
+			}
+			getCert := func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				cert := grpcServer.serverCertificate.Load().(tls.Certificate)
+				return &cert, nil
+			}
 			//base server certificate
-			certificates := []tls.Certificate{grpcServer.serverCertificate}
 			grpcServer.tlsConfig = &tls.Config{
-				Certificates:           certificates,
+				GetCertificate:         getCert,
 				SessionTicketsDisabled: true,
+				CipherSuites:           secureConfig.CipherSuites,
 			}
 			grpcServer.tlsConfig.ClientAuth = tls.RequestClientCert
-			//checkif client authentication is required
+			//check if client authentication is required
 			if secureConfig.RequireClientCert {
 				//require TLS client auth
 				grpcServer.tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
@@ -162,60 +113,80 @@ func NewGRPCServerFromListener(listener net.Listener, secureConfig SecureServerC
 			creds := NewServerTransportCredentials(grpcServer.tlsConfig)
 			serverOpts = append(serverOpts, grpc.Creds(creds))
 		} else {
-			return nil, errors.New("secureConfig must contain both ServerKey and " +
-				"ServerCertificate when UseTLS is true")
+			return nil, errors.New("serverConfig.SecOpts must contain both Key and " +
+				"Certificate when UseTLS is true")
 		}
 	}
 	// set max send and recv msg sizes
-	serverOpts = append(serverOpts, grpc.MaxSendMsgSize(MaxSendMsgSize()))
-	serverOpts = append(serverOpts, grpc.MaxRecvMsgSize(MaxRecvMsgSize()))
+	serverOpts = append(serverOpts, grpc.MaxSendMsgSize(MaxSendMsgSize))
+	serverOpts = append(serverOpts, grpc.MaxRecvMsgSize(MaxRecvMsgSize))
 	// set the keepalive options
-	serverOpts = append(serverOpts, ServerKeepaliveOptions()...)
+	serverOpts = append(serverOpts, ServerKeepaliveOptions(serverConfig.KaOpts)...)
+	// set connection timeout
+	if serverConfig.ConnectionTimeout <= 0 {
+		serverConfig.ConnectionTimeout = DefaultConnectionTimeout
+	}
+	serverOpts = append(
+		serverOpts,
+		grpc.ConnectionTimeout(serverConfig.ConnectionTimeout))
 
 	grpcServer.server = grpc.NewServer(serverOpts...)
 
 	return grpcServer, nil
 }
 
-//Address returns the listen address for this GRPCServer instance
-func (gServer *grpcServerImpl) Address() string {
+// SetServerCertificate assigns the current TLS certificate to be the peer's server certificate
+func (gServer *GRPCServer) SetServerCertificate(cert tls.Certificate) {
+	gServer.serverCertificate.Store(cert)
+}
+
+// Address returns the listen address for this GRPCServer instance
+func (gServer *GRPCServer) Address() string {
 	return gServer.address
 }
 
-//Listener returns the net.Listener for the GRPCServer instance
-func (gServer *grpcServerImpl) Listener() net.Listener {
+// Listener returns the net.Listener for the GRPCServer instance
+func (gServer *GRPCServer) Listener() net.Listener {
 	return gServer.listener
 }
 
-//Server returns the grpc.Server for the GRPCServer instance
-func (gServer *grpcServerImpl) Server() *grpc.Server {
+// Server returns the grpc.Server for the GRPCServer instance
+func (gServer *GRPCServer) Server() *grpc.Server {
 	return gServer.server
 }
 
-//ServerCertificate returns the tls.Certificate used by the grpc.Server
-func (gServer *grpcServerImpl) ServerCertificate() tls.Certificate {
-	return gServer.serverCertificate
+// ServerCertificate returns the tls.Certificate used by the grpc.Server
+func (gServer *GRPCServer) ServerCertificate() tls.Certificate {
+	return gServer.serverCertificate.Load().(tls.Certificate)
 }
 
-//TLSEnabled is a flag indicating whether or not TLS is enabled for the
-//GRPCServer instance
-func (gServer *grpcServerImpl) TLSEnabled() bool {
-	return gServer.tlsEnabled
+// TLSEnabled is a flag indicating whether or not TLS is enabled for the
+// GRPCServer instance
+func (gServer *GRPCServer) TLSEnabled() bool {
+	return gServer.tlsConfig != nil
 }
 
-//Start starts the underlying grpc.Server
-func (gServer *grpcServerImpl) Start() error {
+// MutualTLSRequired is a flag indicating whether or not client certificates
+// are required for this GRPCServer instance
+func (gServer *GRPCServer) MutualTLSRequired() bool {
+	return gServer.tlsConfig != nil &&
+		gServer.tlsConfig.ClientAuth ==
+			tls.RequireAndVerifyClientCert
+}
+
+// Start starts the underlying grpc.Server
+func (gServer *GRPCServer) Start() error {
 	return gServer.server.Serve(gServer.listener)
 }
 
-//Stop stops the underlying grpc.Server
-func (gServer *grpcServerImpl) Stop() {
+// Stop stops the underlying grpc.Server
+func (gServer *GRPCServer) Stop() {
 	gServer.server.Stop()
 }
 
-//AppendClientRootCAs appends PEM-encoded X509 certificate authorities to
-//the list of authorities used to verify client certificates
-func (gServer *grpcServerImpl) AppendClientRootCAs(clientRoots [][]byte) error {
+// AppendClientRootCAs appends PEM-encoded X509 certificate authorities to
+// the list of authorities used to verify client certificates
+func (gServer *GRPCServer) AppendClientRootCAs(clientRoots [][]byte) error {
 	gServer.lock.Lock()
 	defer gServer.lock.Unlock()
 	for _, clientRoot := range clientRoots {
@@ -227,8 +198,8 @@ func (gServer *grpcServerImpl) AppendClientRootCAs(clientRoots [][]byte) error {
 	return nil
 }
 
-//internal function to add a PEM-encoded clientRootCA
-func (gServer *grpcServerImpl) appendClientRootCA(clientRoot []byte) error {
+// internal function to add a PEM-encoded clientRootCA
+func (gServer *GRPCServer) appendClientRootCA(clientRoot []byte) error {
 
 	errMsg := "Failed to append client root certificate(s): %s"
 	//convert to x509
@@ -250,9 +221,9 @@ func (gServer *grpcServerImpl) appendClientRootCA(clientRoot []byte) error {
 	return nil
 }
 
-//RemoveClientRootCAs removes PEM-encoded X509 certificate authorities from
-//the list of authorities used to verify client certificates
-func (gServer *grpcServerImpl) RemoveClientRootCAs(clientRoots [][]byte) error {
+// RemoveClientRootCAs removes PEM-encoded X509 certificate authorities from
+// the list of authorities used to verify client certificates
+func (gServer *GRPCServer) RemoveClientRootCAs(clientRoots [][]byte) error {
 	gServer.lock.Lock()
 	defer gServer.lock.Unlock()
 	//remove from internal map
@@ -274,8 +245,8 @@ func (gServer *grpcServerImpl) RemoveClientRootCAs(clientRoots [][]byte) error {
 	return nil
 }
 
-//internal function to remove a PEM-encoded clientRootCA
-func (gServer *grpcServerImpl) removeClientRootCA(clientRoot []byte) error {
+// internal function to remove a PEM-encoded clientRootCA
+func (gServer *GRPCServer) removeClientRootCA(clientRoot []byte) error {
 
 	errMsg := "Failed to remove client root certificate(s): %s"
 	//convert to x509
@@ -298,9 +269,9 @@ func (gServer *grpcServerImpl) removeClientRootCA(clientRoot []byte) error {
 	return nil
 }
 
-//SetClientRootCAs sets the list of authorities used to verify client
-//certificates based on a list of PEM-encoded X509 certificate authorities
-func (gServer *grpcServerImpl) SetClientRootCAs(clientRoots [][]byte) error {
+// SetClientRootCAs sets the list of authorities used to verify client
+// certificates based on a list of PEM-encoded X509 certificate authorities
+func (gServer *GRPCServer) SetClientRootCAs(clientRoots [][]byte) error {
 	gServer.lock.Lock()
 	defer gServer.lock.Unlock()
 
@@ -331,34 +302,4 @@ func (gServer *grpcServerImpl) SetClientRootCAs(clientRoots [][]byte) error {
 	//replace the current ClientCAs pool
 	gServer.tlsConfig.ClientCAs = certPool
 	return nil
-}
-
-//utility function to parse PEM-encoded certs
-func pemToX509Certs(pemCerts []byte) ([]*x509.Certificate, []string, error) {
-
-	//it's possible that multiple certs are encoded
-	certs := []*x509.Certificate{}
-	subjects := []string{}
-	for len(pemCerts) > 0 {
-		var block *pem.Block
-		block, pemCerts = pem.Decode(pemCerts)
-		if block == nil {
-			break
-		}
-		/** TODO: check why msp does not add type to PEM header
-		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-			continue
-		}
-		*/
-
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, subjects, err
-		} else {
-			certs = append(certs, cert)
-			//extract and append the subject
-			subjects = append(subjects, string(cert.RawSubject))
-		}
-	}
-	return certs, subjects, nil
 }

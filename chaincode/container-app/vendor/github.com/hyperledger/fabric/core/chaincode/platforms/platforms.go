@@ -1,17 +1,7 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
 */
 
 package platforms
@@ -30,8 +20,10 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/metadata"
 	"github.com/hyperledger/fabric/core/chaincode/platforms/car"
+	"github.com/hyperledger/fabric/core/chaincode/platforms/ccmetadata"
 	"github.com/hyperledger/fabric/core/chaincode/platforms/golang"
 	"github.com/hyperledger/fabric/core/chaincode/platforms/java"
+	"github.com/hyperledger/fabric/core/chaincode/platforms/node"
 	"github.com/hyperledger/fabric/core/config"
 	cutil "github.com/hyperledger/fabric/core/container/util"
 	pb "github.com/hyperledger/fabric/protos/peer"
@@ -46,9 +38,20 @@ type Platform interface {
 	GetDeploymentPayload(spec *pb.ChaincodeSpec) ([]byte, error)
 	GenerateDockerfile(spec *pb.ChaincodeDeploymentSpec) (string, error)
 	GenerateDockerBuild(spec *pb.ChaincodeDeploymentSpec, tw *tar.Writer) error
+	GetMetadataProvider(spec *pb.ChaincodeDeploymentSpec) ccmetadata.MetadataProvider
 }
 
 var logger = flogging.MustGetLogger("chaincode-platform")
+
+// Added for unit testing purposes
+var _Find = Find
+var _GetPath = config.GetPath
+var _VGetBool = viper.GetBool
+var _OSStat = os.Stat
+var _IOUtilReadFile = ioutil.ReadFile
+var _CUtilWriteBytesToPackage = cutil.WriteBytesToPackage
+var _generateDockerfile = generateDockerfile
+var _generateDockerBuild = generateDockerBuild
 
 // Find returns the platform interface for the given platform type
 func Find(chaincodeType pb.ChaincodeSpec_Type) (Platform, error) {
@@ -60,6 +63,8 @@ func Find(chaincodeType pb.ChaincodeSpec_Type) (Platform, error) {
 		return &car.Platform{}, nil
 	case pb.ChaincodeSpec_JAVA:
 		return &java.Platform{}, nil
+	case pb.ChaincodeSpec_NODE:
+		return &node.Platform{}, nil
 	default:
 		return nil, fmt.Errorf("Unknown chaincodeType: %s", chaincodeType)
 	}
@@ -67,7 +72,7 @@ func Find(chaincodeType pb.ChaincodeSpec_Type) (Platform, error) {
 }
 
 func GetDeploymentPayload(spec *pb.ChaincodeSpec) ([]byte, error) {
-	platform, err := Find(spec.Type)
+	platform, err := _Find(spec.Type)
 	if err != nil {
 		return nil, err
 	}
@@ -75,28 +80,7 @@ func GetDeploymentPayload(spec *pb.ChaincodeSpec) ([]byte, error) {
 	return platform.GetDeploymentPayload(spec)
 }
 
-func getPeerTLSCert() ([]byte, error) {
-
-	if viper.GetBool("peer.tls.enabled") == false {
-		// no need for certificates if TLS is not enabled
-		return nil, nil
-	}
-	var path string
-	// first we check for the rootcert
-	path = config.GetPath("peer.tls.rootcert.file")
-	if path == "" {
-		// check for tls cert
-		path = config.GetPath("peer.tls.cert.file")
-	}
-	// this should not happen if the peer is running with TLS enabled
-	if _, err := os.Stat(path); err != nil {
-		return nil, err
-	}
-	// FIXME: FAB-2037 - ensure we sanely resolve relative paths specified in the yaml
-	return ioutil.ReadFile(path)
-}
-
-func generateDockerfile(platform Platform, cds *pb.ChaincodeDeploymentSpec, tls bool) ([]byte, error) {
+func generateDockerfile(platform Platform, cds *pb.ChaincodeDeploymentSpec) ([]byte, error) {
 
 	var buf []string
 
@@ -107,7 +91,6 @@ func generateDockerfile(platform Platform, cds *pb.ChaincodeDeploymentSpec, tls 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to generate platform-specific Dockerfile: %s", err)
 	}
-
 	buf = append(buf, base)
 
 	// ----------------------------------------------------------------------------------------------------
@@ -118,19 +101,11 @@ func generateDockerfile(platform Platform, cds *pb.ChaincodeDeploymentSpec, tls 
 	buf = append(buf, fmt.Sprintf("      %s.chaincode.type=\"%s\" \\", metadata.BaseDockerLabel, cds.ChaincodeSpec.Type.String()))
 	buf = append(buf, fmt.Sprintf("      %s.version=\"%s\" \\", metadata.BaseDockerLabel, metadata.Version))
 	buf = append(buf, fmt.Sprintf("      %s.base.version=\"%s\"", metadata.BaseDockerLabel, metadata.BaseVersion))
-
 	// ----------------------------------------------------------------------------------------------------
 	// Then augment it with any general options
 	// ----------------------------------------------------------------------------------------------------
-	//append version so chaincode build version can be campared against peer build version
+	//append version so chaincode build version can be compared against peer build version
 	buf = append(buf, fmt.Sprintf("ENV CORE_CHAINCODE_BUILDLEVEL=%s", metadata.Version))
-
-	if tls {
-		const guestTLSPath = "/etc/hyperledger/fabric/peer.crt"
-
-		buf = append(buf, "ENV CORE_PEER_TLS_ROOTCERT_FILE="+guestTLSPath)
-		buf = append(buf, "COPY peer.crt "+guestTLSPath)
-	}
 
 	// ----------------------------------------------------------------------------------------------------
 	// Finalize it
@@ -151,7 +126,7 @@ func generateDockerBuild(platform Platform, cds *pb.ChaincodeDeploymentSpec, inp
 	// First stream out our static inputFiles
 	// ----------------------------------------------------------------------------------------------------
 	for name, data := range inputFiles {
-		err = cutil.WriteBytesToPackage(name, data, tw)
+		err = _CUtilWriteBytesToPackage(name, data, tw)
 		if err != nil {
 			return fmt.Errorf("Failed to inject \"%s\": %s", name, err)
 		}
@@ -175,29 +150,15 @@ func GenerateDockerBuild(cds *pb.ChaincodeDeploymentSpec) (io.Reader, error) {
 	// ----------------------------------------------------------------------------------------------------
 	// Determine our platform driver from the spec
 	// ----------------------------------------------------------------------------------------------------
-	platform, err := Find(cds.ChaincodeSpec.Type)
+	platform, err := _Find(cds.ChaincodeSpec.Type)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to determine platform type: %s", err)
 	}
 
 	// ----------------------------------------------------------------------------------------------------
-	// Transfer the peer's TLS certificate to our list of input files, if applicable
-	// ----------------------------------------------------------------------------------------------------
-	// NOTE: We bake the peer TLS certificate in at the time we build the chaincode container if a cert is
-	// found, regardless of whether TLS is enabled or not.  The main implication is that if the administrator
-	// updates the peer cert, the chaincode containers will need to be invalidated and rebuilt.
-	// We will manage enabling or disabling TLS at container run time via CORE_PEER_TLS_ENABLED
-	cert, err := getPeerTLSCert()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read the TLS certificate: %s", err)
-	}
-
-	inputFiles["peer.crt"] = cert
-
-	// ----------------------------------------------------------------------------------------------------
 	// Generate the Dockerfile specific to our context
 	// ----------------------------------------------------------------------------------------------------
-	dockerFile, err := generateDockerfile(platform, cds, cert != nil)
+	dockerFile, err := _generateDockerfile(platform, cds)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to generate a Dockerfile: %s", err)
 	}
@@ -209,10 +170,10 @@ func GenerateDockerBuild(cds *pb.ChaincodeDeploymentSpec) (io.Reader, error) {
 	// ----------------------------------------------------------------------------------------------------
 	input, output := io.Pipe()
 
+	generateDockerBuild := _generateDockerBuild
 	go func() {
 		gw := gzip.NewWriter(output)
 		tw := tar.NewWriter(gw)
-
 		err := generateDockerBuild(platform, cds, inputFiles, tw)
 		if err != nil {
 			logger.Error(err)

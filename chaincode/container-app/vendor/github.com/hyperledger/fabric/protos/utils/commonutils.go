@@ -99,9 +99,34 @@ func UnmarshalEnvelope(encoded []byte) (*cb.Envelope, error) {
 	return envelope, err
 }
 
+// UnmarshalBlockOrPanic unmarshals bytes to an Block structure or panics on error
+func UnmarshalBlockOrPanic(encoded []byte) *cb.Block {
+	block, err := UnmarshalBlock(encoded)
+	if err != nil {
+		panic(fmt.Errorf("Error unmarshaling data to block: %s", err))
+	}
+	return block
+}
+
+// UnmarshalBlock unmarshals bytes to an Block structure
+func UnmarshalBlock(encoded []byte) (*cb.Block, error) {
+	block := &cb.Block{}
+	err := proto.Unmarshal(encoded, block)
+	if err != nil {
+		return nil, err
+	}
+	return block, err
+}
+
 // UnmarshalEnvelopeOfType unmarshals an envelope of the specified type, including
 // the unmarshaling the payload data
 func UnmarshalEnvelopeOfType(envelope *cb.Envelope, headerType cb.HeaderType, message proto.Message) (*cb.ChannelHeader, error) {
+	return UnmarshalEnvelopeOfTypes(envelope, []cb.HeaderType{headerType}, message)
+}
+
+// UnmarshalEnvelopeOfTypes unmarshals an envelope of the one of the specified types, including
+// the unmarshaling the payload data
+func UnmarshalEnvelopeOfTypes(envelope *cb.Envelope, expectedHeaderTypes []cb.HeaderType, message proto.Message) (*cb.ChannelHeader, error) {
 	payload, err := UnmarshalPayload(envelope.Payload)
 	if err != nil {
 		return nil, err
@@ -116,12 +141,19 @@ func UnmarshalEnvelopeOfType(envelope *cb.Envelope, headerType cb.HeaderType, me
 		return nil, fmt.Errorf("Invalid ChannelHeader")
 	}
 
-	if chdr.Type != int32(headerType) {
-		return nil, fmt.Errorf("Not a tx of type %v", headerType)
+	headerTypeMatched := false
+	for i := 0; i < len(expectedHeaderTypes); i++ {
+		if chdr.Type == int32(expectedHeaderTypes[i]) {
+			headerTypeMatched = true
+			break
+		}
+	}
+	if !headerTypeMatched {
+		return nil, fmt.Errorf("Not a tx of type %v", expectedHeaderTypes)
 	}
 
 	if err = proto.Unmarshal(payload.Data, message); err != nil {
-		return nil, fmt.Errorf("Error unmarshaling message for type %v: %s", headerType, err)
+		return nil, fmt.Errorf("Error unmarshaling message for type %v: %s", expectedHeaderTypes, err)
 	}
 
 	return chdr, nil
@@ -251,6 +283,16 @@ func UnmarshalChannelHeader(bytes []byte) (*cb.ChannelHeader, error) {
 	return chdr, nil
 }
 
+// UnmarshalChannelHeaderOrPanic unmarshals bytes to a ChannelHeader or panics on error
+func UnmarshalChannelHeaderOrPanic(bytes []byte) *cb.ChannelHeader {
+	chdr := &cb.ChannelHeader{}
+	err := proto.Unmarshal(bytes, chdr)
+	if err != nil {
+		panic(fmt.Errorf("UnmarshalChannelHeader failed, err %s", err))
+	}
+	return chdr
+}
+
 // UnmarshalChaincodeID returns a ChaincodeID from bytes
 func UnmarshalChaincodeID(bytes []byte) (*pb.ChaincodeID, error) {
 	ccid := &pb.ChaincodeID{}
@@ -285,4 +327,37 @@ func IsConfigBlock(block *cb.Block) bool {
 	}
 
 	return cb.HeaderType(hdr.Type) == cb.HeaderType_CONFIG
+}
+
+// ChannelHeader returns the *cb.ChannelHeader for a given *cb.Envelope.
+func ChannelHeader(env *cb.Envelope) (*cb.ChannelHeader, error) {
+	envPayload, err := UnmarshalPayload(env.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("payload unmarshaling error: %s", err)
+	}
+
+	if envPayload.Header == nil {
+		return nil, fmt.Errorf("no header was set")
+	}
+
+	if envPayload.Header.ChannelHeader == nil {
+		return nil, fmt.Errorf("no channel header was set")
+	}
+
+	chdr, err := UnmarshalChannelHeader(envPayload.Header.ChannelHeader)
+	if err != nil {
+		return nil, fmt.Errorf("channel header unmarshaling error: %s", err)
+	}
+
+	return chdr, nil
+}
+
+// ChannelID returns the Channel ID for a given *cb.Envelope.
+func ChannelID(env *cb.Envelope) (string, error) {
+	chdr, err := ChannelHeader(env)
+	if err != nil {
+		return "", fmt.Errorf("channel header unmarshaling error: %s", err)
+	}
+
+	return chdr.ChannelId, nil
 }

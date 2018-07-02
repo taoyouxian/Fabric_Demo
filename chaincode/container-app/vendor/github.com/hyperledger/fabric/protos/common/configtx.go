@@ -66,9 +66,28 @@ func (c *Config) DynamicFieldProto(name string, base proto.Message) (proto.Messa
 		return nil, fmt.Errorf("Config must embed a config group as its dynamic field")
 	}
 
-	return &DynamicChannelGroup{
-		ConfigGroup: cg,
-	}, nil
+	return &DynamicChannelGroup{ConfigGroup: cg}, nil
+}
+
+// ConfigUpdateIsolatedDataTypes allows other proto packages to register types for the
+// the isolated_data field.  This is necessary to break import cycles.
+var ConfigUpdateIsolatedDataTypes = map[string]func(string) proto.Message{}
+
+func (c *ConfigUpdate) StaticallyOpaqueMapFields() []string {
+	return []string{"isolated_data"}
+}
+
+func (c *ConfigUpdate) StaticallyOpaqueMapFieldProto(name string, key string) (proto.Message, error) {
+	if name != c.StaticallyOpaqueMapFields()[0] {
+		return nil, fmt.Errorf("Not a statically opaque map field: %s", name)
+	}
+
+	mf, ok := ConfigUpdateIsolatedDataTypes[key]
+	if !ok {
+		return nil, fmt.Errorf("Unknown map key: %s", key)
+	}
+
+	return mf(key), nil
 }
 
 func (c *ConfigUpdate) DynamicFields() []string {
@@ -85,9 +104,7 @@ func (c *ConfigUpdate) DynamicFieldProto(name string, base proto.Message) (proto
 		return nil, fmt.Errorf("Expected base to be *ConfigGroup, got %T", base)
 	}
 
-	return &DynamicChannelGroup{
-		ConfigGroup: cg,
-	}, nil
+	return &DynamicChannelGroup{ConfigGroup: cg}, nil
 }
 
 func (cv *ConfigValue) VariablyOpaqueFields() []string {

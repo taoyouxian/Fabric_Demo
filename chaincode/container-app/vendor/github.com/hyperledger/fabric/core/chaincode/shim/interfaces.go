@@ -1,17 +1,7 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Copyright IBM Corp. All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package shim
@@ -59,9 +49,16 @@ type ChaincodeStubInterface interface {
 	// Invoke as a byte array
 	GetArgsSlice() ([]byte, error)
 
-	// GetTxID returns the tx_id of the transaction proposal (see ChannelHeader
-	// in protos/common/common.proto)
+	// GetTxID returns the tx_id of the transaction proposal, which is unique per
+	// transaction and per client. See ChannelHeader in protos/common/common.proto
+	// for further details.
 	GetTxID() string
+
+	// GetChannelID returns the channel the proposal is sent to for chaincode to process.
+	// This would be the channel_id of the transaction proposal (see ChannelHeader
+	// in protos/common/common.proto) except where the chaincode is calling another on
+	// a different channel
+	GetChannelID() string
 
 	// InvokeChaincode locally calls the specified chaincode `Invoke` using the
 	// same transaction context; that is, chaincode calling chaincode doesn't
@@ -163,6 +160,68 @@ type ChaincodeStubInterface interface {
 	// update ledger, and should limit use to read-only chaincode operations.
 	GetHistoryForKey(key string) (HistoryQueryIteratorInterface, error)
 
+	// GetPrivateData returns the value of the specified `key` from the specified
+	// `collection`. Note that GetPrivateData doesn't read data from the
+	// private writeset, which has not been committed to the `collection`. In
+	// other words, GetPrivateData doesn't consider data modified by PutPrivateData
+	// that has not been committed.
+	GetPrivateData(collection, key string) ([]byte, error)
+
+	// PutPrivateData puts the specified `key` and `value` into the transaction's
+	// private writeset. Note that only hash of the private writeset goes into the
+	// transaction proposal response (which is sent to the client who issued the
+	// transaction) and the actual private writeset gets temporarily stored in a
+	// transient store. PutPrivateData doesn't effect the `collection` until the
+	// transaction is validated and successfully committed. Simple keys must not be
+	// an empty string and must not start with null character (0x00), in order to
+	// avoid range query collisions with composite keys, which internally get
+	// prefixed with 0x00 as composite key namespace.
+	PutPrivateData(collection string, key string, value []byte) error
+
+	// DelState records the specified `key` to be deleted in the private writeset of
+	// the transaction. Note that only hash of the private writeset goes into the
+	// transaction proposal response (which is sent to the client who issued the
+	// transaction) and the actual private writeset gets temporarily stored in a
+	// transient store. The `key` and its value will be deleted from the collection
+	// when the transaction is validated and successfully committed.
+	DelPrivateData(collection, key string) error
+
+	// GetPrivateDataByRange returns a range iterator over a set of keys in a
+	// given private collection. The iterator can be used to iterate over all keys
+	// between the startKey (inclusive) and endKey (exclusive).
+	// The keys are returned by the iterator in lexical order. Note
+	// that startKey and endKey can be empty string, which implies unbounded range
+	// query on start or end.
+	// Call Close() on the returned StateQueryIteratorInterface object when done.
+	// The query is re-executed during validation phase to ensure result set
+	// has not changed since transaction endorsement (phantom reads detected).
+	GetPrivateDataByRange(collection, startKey, endKey string) (StateQueryIteratorInterface, error)
+
+	// GetPrivateDataByPartialCompositeKey queries the state in a given private
+	// collection based on a given partial composite key. This function returns
+	// an iterator which can be used to iterate over all composite keys whose prefix
+	// matches the given partial composite key. The `objectType` and attributes are
+	// expected to have only valid utf8 strings and should not contain
+	// U+0000 (nil byte) and U+10FFFF (biggest and unallocated code point).
+	// See related functions SplitCompositeKey and CreateCompositeKey.
+	// Call Close() on the returned StateQueryIteratorInterface object when done.
+	// The query is re-executed during validation phase to ensure result set
+	// has not changed since transaction endorsement (phantom reads detected).
+	GetPrivateDataByPartialCompositeKey(collection, objectType string, keys []string) (StateQueryIteratorInterface, error)
+
+	// GetPrivateDataQueryResult performs a "rich" query against a given private
+	// collection. It is only supported for state databases that support rich query,
+	// e.g.CouchDB. The query string is in the native syntax
+	// of the underlying state database. An iterator is returned
+	// which can be used to iterate (next) over the query result set.
+	// The query is NOT re-executed during validation phase, phantom reads are
+	// not detected. That is, other committed transactions may have added,
+	// updated, or removed keys that impact the result set, and this would not
+	// be detected at validation/commit time.  Applications susceptible to this
+	// should therefore not use GetQueryResult as part of transactions that update
+	// ledger, and should limit use to read-only chaincode operations.
+	GetPrivateDataQueryResult(collection, query string) (StateQueryIteratorInterface, error)
+
 	// GetCreator returns `SignatureHeader.Creator` (e.g. an identity)
 	// of the `SignedProposal`. This is the identity of the agent (or user)
 	// submitting the transaction.
@@ -176,8 +235,16 @@ type ChaincodeStubInterface interface {
 	// be omitted from the transaction and excluded from the ledger.
 	GetTransient() (map[string][]byte, error)
 
-	// GetBinding returns the transaction binding
+	// GetBinding returns the transaction binding, which is used to enforce a
+	// link between application data (like those stored in the transient field
+	// above) to the proposal itself. This is useful to avoid possible replay
+	// attacks.
 	GetBinding() ([]byte, error)
+
+	// GetDecorations returns additional data (if applicable) about the proposal
+	// that originated from the peer. This data is set by the decorators of the
+	// peer, which append or mutate the chaincode input passed to the chaincode.
+	GetDecorations() map[string][]byte
 
 	// GetSignedProposal returns the SignedProposal object, which contains all
 	// data elements part of a transaction proposal.
@@ -185,12 +252,13 @@ type ChaincodeStubInterface interface {
 
 	// GetTxTimestamp returns the timestamp when the transaction was created. This
 	// is taken from the transaction ChannelHeader, therefore it will indicate the
-	// client's timestamp, and will have the same value across all endorsers.
+	// client's timestamp and will have the same value across all endorsers.
 	GetTxTimestamp() (*timestamp.Timestamp, error)
 
-	// SetEvent allows the chaincode to propose an event on the transaction
-	// proposal. If the transaction is validated and successfully committed,
-	// the event will be delivered to the current event listeners.
+	// SetEvent allows the chaincode to set an event on the response to the
+	// proposal to be included as part of a transaction. The event will be
+	// available within the transaction in the committed block regardless of the
+	// validity of the transaction.
 	SetEvent(name string, payload []byte) error
 }
 

@@ -139,6 +139,8 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 
 func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string, ENCKEY, IV []byte) sc.Response {
+	fmt.Printf("Func encRecord begin===== \n")
+
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
@@ -197,6 +199,7 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 }
 
 func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []string, DECKEY, IV []byte) sc.Response {
+	fmt.Printf("Func decRecord begin===== \n")
 
 	if len(args) != 2 {
 		return shim.Error("Incorrect number of arguments. Expecting 2")
@@ -209,10 +212,10 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 	// here we decrypt the state associated to key
 	cleartextValue, err := getStateAndDecrypt(APIstub, ent, key)
 	// 这里需要循环判断输出与输入年份一致的信息
-
 	if err != nil {
 		return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
 	}
+	fmt.Println(cleartextValue)
 
 	// here we return the decrypted value as a result
 	return shim.Success(cleartextValue)
