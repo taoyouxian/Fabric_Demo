@@ -29,3 +29,14 @@ cashe/
 
 # used for ADF styles caching
 temp/
+
+# Package Files #
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Log file
+*.log
