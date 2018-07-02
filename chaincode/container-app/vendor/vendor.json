@@ -578,5 +578,5 @@
 			"revisionTime": "2017-07-11T12:18:19Z"
 		}
 	],
-	"rootPath": "github.com/hyperledger/fabric-samples/chaincode/container-app"
+	"rootPath": "github.com/hyperledger/Fabric_Demo/chaincode/container-app"
 }
