@@ -29,9 +29,12 @@ func main() {
 		fmt.Println(err)
 	}
 
+	var value string
 	// 查找键值是否存在
 	if v, ok := dat["name"]; ok {
-		fmt.Println(v)
+		value = v.(string)
+		fmt.Println("Key Found\t" + v.(string))
+		fmt.Println("Key Found\t" + value)
 	} else {
 		fmt.Println("Key Not Found")
 	}

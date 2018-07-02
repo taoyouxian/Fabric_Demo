@@ -112,7 +112,7 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 	var value string
 	// 查找键值是否存在
 	if v, ok := dat[args[1]]; ok {
-		value = v
+		value = v.(string)
 		fmt.Println("Key Found: " + v + "\t" + value)
 	} else {
 		fmt.Println("Key Not Found")
