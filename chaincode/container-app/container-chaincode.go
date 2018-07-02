@@ -70,7 +70,8 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 		fmt.Println("Key Found, Get Old Value")
 		var dat map[string]interface{}
 		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-			fmt.Println("Old Value: " + dat)
+			fmt.Println("Old Value: ")
+			fmt.Print(dat)
 			param += args[2] + "_" + args[3]
 			dat[args[1]] = param
 			str, err := json.Marshal(dat)
