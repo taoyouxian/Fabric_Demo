@@ -5,13 +5,13 @@ import (
 	"fmt"
 	_ "strconv"
 	_ "errors"
+	"strings"
 
+	"github.com/hyperledger/fabric/bccsp"
 	_ "github.com/hyperledger/fabric/bccsp/factory"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	sc "github.com/hyperledger/fabric/protos/peer"
-	"strings"
-	"github.com/hyperledger/fabric/bccsp"
 	"github.com/hyperledger/fabric/core/chaincode/shim/ext/entities"
+	sc "github.com/hyperledger/fabric/protos/peer"
 )
 const DECKEY = "DECKEY"
 const VERKEY = "VERKEY"

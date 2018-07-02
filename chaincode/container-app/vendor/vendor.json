@@ -265,6 +265,12 @@
 			"revisionTime": "2017-07-11T12:18:19Z"
 		},
 		{
+			"checksumSHA1": "H1TbzJh3rUC6C3iNvwAckzVI2JE=",
+			"path": "github.com/hyperledger/fabric/core/chaincode/shim/ext/entities",
+			"revision": "3b1497f8d0cb59dd28a5b7dcc216777d9c607ed3",
+			"revisionTime": "2018-07-02T12:45:55Z"
+		},
+		{
 			"checksumSHA1": "F5XKKFzmdjgFr49Q/053I9akJWg=",
 			"path": "github.com/hyperledger/fabric/core/comm",
 			"revision": "e4b47043270f2293daabf7d24984dd46901e04e7",
@@ -373,6 +379,13 @@
 			"path": "github.com/opencontainers/runc/libcontainer/user",
 			"revision": "e4b47043270f2293daabf7d24984dd46901e04e7",
 			"revisionTime": "2017-07-11T12:18:19Z"
+		},
+		{
+			"checksumSHA1": "cozq4/7ioFamHmCA2IfgA1c+5Gc=",
+			"origin": "github.com/hyperledger/fabric/vendor/github.com/pkg/errors",
+			"path": "github.com/pkg/errors",
+			"revision": "3b1497f8d0cb59dd28a5b7dcc216777d9c607ed3",
+			"revisionTime": "2018-07-02T12:45:55Z"
 		},
 		{
 			"checksumSHA1": "NDSnw8vnCScWoKlqqooqgM8Nq4s=",
