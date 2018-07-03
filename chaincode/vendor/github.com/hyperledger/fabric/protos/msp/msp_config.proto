@@ -83,9 +83,9 @@ message FabricMSPConfig {
     // They are returned by GetTLSIntermediateCerts.
     repeated bytes tls_intermediate_certs = 10;
 
-    // fabric_node_ous contains the configuration to distinguish clients from peers from orderers
+    // FabricNodeOUs contains the configuration to distinguish clients from peers from orderers
     // based on the OUs.
-    FabricNodeOUs fabric_node_ous = 11;
+    FabricNodeOUs FabricNodeOUs = 11;
 }
 
 // FabricCryptoConfig contains configuration parameters
@@ -111,38 +111,26 @@ message IdemixMSPConfig {
     // Name holds the identifier of the MSP
     string name = 1;
 
-    // ipk represents the (serialized) issuer public key
-    bytes ipk = 2;
+    // IPk represents the (serialized) issuer public key
+    bytes IPk = 2;
 
     // signer may contain crypto material to configure a default signer
     IdemixMSPSignerConfig signer = 3;
-
-    // revocation_pk is the public key used for revocation of credentials
-    bytes revocation_pk = 4;
-
-    // epoch represents the current epoch (time interval) used for revocation
-    int64 epoch = 5;
 }
 
 // IdemixMSPSIgnerConfig contains the crypto material to set up an idemix signing identity
 message IdemixMSPSignerConfig {
-    // cred represents the serialized idemix credential of the default signer
-    bytes cred = 1;
+    // Cred represents the serialized idemix credential of the default signer
+    bytes Cred = 1;
 
-    // sk is the secret key of the default signer, corresponding to credential Cred
-    bytes sk = 2;
+    // Sk is the secret key of the default signer, corresponding to credential Cred
+    bytes Sk = 2;
 
     // organizational_unit_identifier defines the organizational unit the default signer is in
     string organizational_unit_identifier = 3;
 
     // is_admin defines whether the default signer is admin or not
     bool is_admin = 4;
-
-    // enrollment_id contains the enrollment id of this signer
-    string enrollment_id = 5;
-
-    // credential_revocation_information contains a serialized CredentialRevocationInformation
-    bytes credential_revocation_information = 6;
 }
 
 // SigningIdentityInfo represents the configuration information
@@ -197,12 +185,12 @@ message FabricOUIdentifier {
 // that does not contain any of the specified OU will be considered invalid.
 message FabricNodeOUs {
     // If true then an msp identity that does not contain any of the specified OU will be considered invalid.
-    bool   enable = 1;
+    bool   Enable = 1;
 
     // OU Identifier of the clients
-    FabricOUIdentifier client_ou_identifier = 2;
+    FabricOUIdentifier clientOUIdentifier = 2;
 
     // OU Identifier of the peers
-    FabricOUIdentifier peer_ou_identifier = 3;
+    FabricOUIdentifier peerOUIdentifier = 3;
 
 }

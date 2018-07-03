@@ -18,9 +18,39 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
-type GRPCClient struct {
+type GRPCClient interface {
+	// Certificate returns the tls.Certificate used to make TLS connections
+	// when client certificates are required by the server
+	Certificate() tls.Certificate
+	// TLSEnabled is a flag indicating whether to use TLS for client
+	// connections
+	TLSEnabled() bool
+	// MutualTLSRequired is a flag indicating whether the client
+	// must send a certificate when making TLS connections
+	MutualTLSRequired() bool
+	// SetMaxRecvMsgSize sets the maximum message size the client can receive
+	SetMaxRecvMsgSize(size int)
+	// SetMaxSendMsgSize sets the maximum message size the client can send
+	SetMaxSendMsgSize(size int)
+	// SetServerRootCAs sets the list of authorities used to verify server
+	// certificates based on a list of PEM-encoded X509 certificate authorities
+	SetServerRootCAs(clientRoots [][]byte) error
+	// NewConnection returns a grpc.ClientConn for the target address and
+	// overrides the server name used to verify the hostname on the
+	// certificate returned by a server when using TLS
+	NewConnection(address string, serverNameOverride string) (*grpc.ClientConn, error)
+}
+
+type grpcClient struct {
+	// Set of PEM-encoded X509 certificate authorities used to populate
+	// the tlsConfig.RootCAs indexed by subject
+	serverRootCAs map[string]*x509.Certificate
 	// TLS configuration used by the grpc.ClientConn
 	tlsConfig *tls.Config
+	// Flag indicating whether TLS is enabled
+	tlsEnabled bool
+	// Flag indicating whether a client certificate is required
+	mutualTLSRequired bool
 	// Options for setting up new connections
 	dialOpts []grpc.DialOption
 	// Duration for which to block while established a new connection
@@ -33,8 +63,10 @@ type GRPCClient struct {
 
 // NewGRPCClient creates a new implementation of GRPCClient given an address
 // and client configuration
-func NewGRPCClient(config ClientConfig) (*GRPCClient, error) {
-	client := &GRPCClient{}
+func NewGRPCClient(config ClientConfig) (GRPCClient, error) {
+	client := &grpcClient{
+		tlsEnabled:        false,
+		mutualTLSRequired: false}
 
 	// parse secure options
 	err := client.parseSecureOptions(config.SecOpts)
@@ -51,8 +83,8 @@ func NewGRPCClient(config ClientConfig) (*GRPCClient, error) {
 	} else {
 		// use defaults
 		kap = keepalive.ClientParameters{
-			Time:    DefaultKeepaliveOptions.ClientInterval,
-			Timeout: DefaultKeepaliveOptions.ClientTimeout}
+			Time:    keepaliveOptions.ClientInterval,
+			Timeout: keepaliveOptions.ClientTimeout}
 	}
 	kap.PermitWithoutStream = true
 	// set keepalive and blocking
@@ -60,17 +92,18 @@ func NewGRPCClient(config ClientConfig) (*GRPCClient, error) {
 		grpc.WithBlock())
 	client.timeout = config.Timeout
 	// set send/recv message size to package defaults
-	client.maxRecvMsgSize = MaxRecvMsgSize
-	client.maxSendMsgSize = MaxSendMsgSize
+	client.maxRecvMsgSize = maxRecvMsgSize
+	client.maxSendMsgSize = maxSendMsgSize
 
 	return client, nil
 }
 
-func (client *GRPCClient) parseSecureOptions(opts *SecureOptions) error {
+func (client *grpcClient) parseSecureOptions(opts *SecureOptions) error {
 
 	if opts == nil || !opts.UseTLS {
 		return nil
 	}
+	client.tlsEnabled = true
 	client.tlsConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12} // TLS 1.2 only
 	if len(opts.ServerRootCAs) > 0 {
@@ -85,6 +118,7 @@ func (client *GRPCClient) parseSecureOptions(opts *SecureOptions) error {
 		}
 	}
 	if opts.RequireClientCert {
+		client.mutualTLSRequired = true
 		// make sure we have both Key and Certificate
 		if opts.Key != nil &&
 			opts.Certificate != nil {
@@ -106,7 +140,7 @@ func (client *GRPCClient) parseSecureOptions(opts *SecureOptions) error {
 
 // Certificate returns the tls.Certificate used to make TLS connections
 // when client certificates are required by the server
-func (client *GRPCClient) Certificate() tls.Certificate {
+func (client *grpcClient) Certificate() tls.Certificate {
 	cert := tls.Certificate{}
 	if client.tlsConfig != nil && len(client.tlsConfig.Certificates) > 0 {
 		cert = client.tlsConfig.Certificates[0]
@@ -116,30 +150,29 @@ func (client *GRPCClient) Certificate() tls.Certificate {
 
 // TLSEnabled is a flag indicating whether to use TLS for client
 // connections
-func (client *GRPCClient) TLSEnabled() bool {
-	return client.tlsConfig != nil
+func (client *grpcClient) TLSEnabled() bool {
+	return client.tlsEnabled
 }
 
 // MutualTLSRequired is a flag indicating whether the client
 // must send a certificate when making TLS connections
-func (client *GRPCClient) MutualTLSRequired() bool {
-	return client.tlsConfig != nil &&
-		len(client.tlsConfig.Certificates) > 0
+func (client *grpcClient) MutualTLSRequired() bool {
+	return client.mutualTLSRequired
 }
 
 // SetMaxRecvMsgSize sets the maximum message size the client can receive
-func (client *GRPCClient) SetMaxRecvMsgSize(size int) {
+func (client *grpcClient) SetMaxRecvMsgSize(size int) {
 	client.maxRecvMsgSize = size
 }
 
 // SetMaxSendMsgSize sets the maximum message size the client can send
-func (client *GRPCClient) SetMaxSendMsgSize(size int) {
+func (client *grpcClient) SetMaxSendMsgSize(size int) {
 	client.maxSendMsgSize = size
 }
 
 // SetServerRootCAs sets the list of authorities used to verify server
 // certificates based on a list of PEM-encoded X509 certificate authorities
-func (client *GRPCClient) SetServerRootCAs(serverRoots [][]byte) error {
+func (client *grpcClient) SetServerRootCAs(serverRoots [][]byte) error {
 
 	// NOTE: if no serverRoots are specified, the current cert pool will be
 	// replaced with an empty one
@@ -157,7 +190,7 @@ func (client *GRPCClient) SetServerRootCAs(serverRoots [][]byte) error {
 // NewConnection returns a grpc.ClientConn for the target address and
 // overrides the server name used to verify the hostname on the
 // certificate returned by a server when using TLS
-func (client *GRPCClient) NewConnection(address string, serverNameOverride string) (
+func (client *grpcClient) NewConnection(address string, serverNameOverride string) (
 	*grpc.ClientConn, error) {
 
 	var dialOpts []grpc.DialOption

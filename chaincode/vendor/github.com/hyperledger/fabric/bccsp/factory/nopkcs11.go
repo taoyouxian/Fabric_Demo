@@ -1,4 +1,4 @@
-// +build !pkcs11
+// +build nopkcs11
 
 /*
 Copyright IBM Corp. 2017 All Rights Reserved.

@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	pb "github.com/hyperledger/fabric/protos/peer"
-	"github.com/pkg/errors"
 )
 
 //SendPanicFailure
@@ -56,10 +55,7 @@ func (s *inProcStream) Send(msg *pb.ChaincodeMessage) (err error) {
 }
 
 func (s *inProcStream) Recv() (*pb.ChaincodeMessage, error) {
-	msg, ok := <-s.recv
-	if !ok {
-		return nil, errors.New("channel is closed")
-	}
+	msg := <-s.recv
 	return msg, nil
 }
 

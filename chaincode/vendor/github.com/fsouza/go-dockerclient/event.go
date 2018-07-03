@@ -1,4 +1,4 @@
-// Copyright 2014 go-dockerclient authors. All rights reserved.
+// Copyright 2015 go-dockerclient authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -78,10 +78,6 @@ var (
 	// exists.
 	ErrListenerAlreadyExists = errors.New("listener already exists for docker events")
 
-	// ErrTLSNotSupported is the error returned when the client does not support
-	// TLS (this applies to the Windows named pipe client).
-	ErrTLSNotSupported = errors.New("tls not supported by this client")
-
 	// EOFEvent is sent when the event listener receives an EOF error.
 	EOFEvent = &APIEvents{
 		Type:   "EOF",
@@ -100,7 +96,11 @@ func (c *Client) AddEventListener(listener chan<- *APIEvents) error {
 			return err
 		}
 	}
-	return c.eventMonitor.addListener(listener)
+	err = c.eventMonitor.addListener(listener)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // RemoveEventListener removes a listener from the monitor.
@@ -216,7 +216,7 @@ func (eventState *eventMonitoringState) monitorEvents(c *Client) {
 				return
 			}
 			eventState.updateLastSeen(ev)
-			eventState.sendEvent(ev)
+			go eventState.sendEvent(ev)
 		case err = <-eventState.errC:
 			if err == ErrNoListeners {
 				eventState.disableEventMonitoring()
@@ -274,10 +274,7 @@ func (eventState *eventMonitoringState) sendEvent(event *APIEvents) {
 		}
 
 		for _, listener := range eventState.listeners {
-			select {
-			case listener <- event:
-			default:
-			}
+			listener <- event
 		}
 	}
 }
@@ -297,7 +294,7 @@ func (c *Client) eventHijack(startTime int64, eventChan chan *APIEvents, errChan
 	}
 	protocol := c.endpointURL.Scheme
 	address := c.endpointURL.Path
-	if protocol != "unix" && protocol != "npipe" {
+	if protocol != "unix" {
 		protocol = "tcp"
 		address = c.endpointURL.Host
 	}
@@ -306,11 +303,7 @@ func (c *Client) eventHijack(startTime int64, eventChan chan *APIEvents, errChan
 	if c.TLSConfig == nil {
 		dial, err = c.Dialer.Dial(protocol, address)
 	} else {
-		netDialer, ok := c.Dialer.(*net.Dialer)
-		if !ok {
-			return ErrTLSNotSupported
-		}
-		dial, err = tlsDialWithDialer(netDialer, protocol, address, c.TLSConfig)
+		dial, err = tlsDialWithDialer(c.Dialer, protocol, address, c.TLSConfig)
 	}
 	if err != nil {
 		return err
@@ -345,12 +338,11 @@ func (c *Client) eventHijack(startTime int64, eventChan chan *APIEvents, errChan
 			if event.Time == 0 {
 				continue
 			}
-			transformEvent(&event)
-			c.eventMonitor.RLock()
-			if c.eventMonitor.enabled && c.eventMonitor.C == eventChan {
-				eventChan <- &event
+			if !c.eventMonitor.isEnabled() || c.eventMonitor.C != eventChan {
+				return
 			}
-			c.eventMonitor.RUnlock()
+			transformEvent(&event)
+			eventChan <- &event
 		}
 	}(res, conn)
 	return nil

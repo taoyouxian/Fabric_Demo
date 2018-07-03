@@ -7,8 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 package idemix
 
 import (
-	"github.com/hyperledger/fabric-amcl/amcl"
-	"github.com/hyperledger/fabric-amcl/amcl/FP256BN"
+	"github.com/milagro-crypto/amcl/version3/go/amcl"
+	"github.com/milagro-crypto/amcl/version3/go/amcl/FP256BN"
 	"github.com/pkg/errors"
 )
 
@@ -31,13 +31,15 @@ const credRequestLabel = "credRequest"
 //    the signature value, a randomness used to create the signature, the user secret, and the attribute values
 
 // NewCredRequest creates a new Credential Request, the first message of the interactive credential issuance protocol (from user to issuer)
-func NewCredRequest(sk *FP256BN.BIG, IssuerNonce *FP256BN.BIG, ipk *IssuerPublicKey, rng *amcl.RAND) *CredRequest {
+func NewCredRequest(sk *FP256BN.BIG, credS1 *FP256BN.BIG, IssuerNonce *FP256BN.BIG, ipk *IssuerPublicKey, rng *amcl.RAND) *CredRequest {
 	HSk := EcpFromProto(ipk.HSk)
-	Nym := HSk.Mul(sk)
+	HRand := EcpFromProto(ipk.HRand)
+	Nym := HSk.Mul2(sk, HRand, credS1)
 
 	// Create ZK Proof
 	rSk := RandModOrder(rng)
-	t := HSk.Mul(rSk)
+	rRand := RandModOrder(rng)
+	t := HSk.Mul2(rSk, HRand, rRand)
 
 	// proofData is the data being hashed, it consists of:
 	// the credential request label
@@ -54,13 +56,10 @@ func NewCredRequest(sk *FP256BN.BIG, IssuerNonce *FP256BN.BIG, ipk *IssuerPublic
 	copy(proofData[index:], ipk.Hash)
 
 	proofC := HashModOrder(proofData)
-	proofS := Modadd(FP256BN.Modmul(proofC, sk, GroupOrder), rSk, GroupOrder)
+	proofS1 := Modadd(FP256BN.Modmul(proofC, sk, GroupOrder), rSk, GroupOrder)
+	proofS2 := Modadd(FP256BN.Modmul(proofC, credS1, GroupOrder), rRand, GroupOrder)
 
-	return &CredRequest{
-		Nym:         EcpToProto(Nym),
-		IssuerNonce: BigToBytes(IssuerNonce),
-		ProofC:      BigToBytes(proofC),
-		ProofS:      BigToBytes(proofS)}
+	return &CredRequest{EcpToProto(Nym), BigToBytes(IssuerNonce), BigToBytes(proofC), BigToBytes(proofS1), BigToBytes(proofS2)}
 }
 
 // Check cryptographically verifies the credential request
@@ -68,15 +67,17 @@ func (m *CredRequest) Check(ipk *IssuerPublicKey) error {
 	Nym := EcpFromProto(m.GetNym())
 	IssuerNonce := FP256BN.FromBytes(m.GetIssuerNonce())
 	ProofC := FP256BN.FromBytes(m.GetProofC())
-	ProofS := FP256BN.FromBytes(m.GetProofS())
+	ProofS1 := FP256BN.FromBytes(m.GetProofS1())
+	ProofS2 := FP256BN.FromBytes(m.GetProofS2())
 
 	HSk := EcpFromProto(ipk.HSk)
+	HRand := EcpFromProto(ipk.HRand)
 
-	if Nym == nil || IssuerNonce == nil || ProofC == nil || ProofS == nil {
+	if Nym == nil || IssuerNonce == nil || ProofC == nil || ProofS1 == nil || ProofS2 == nil {
 		return errors.Errorf("one of the proof values is undefined")
 	}
 
-	t := HSk.Mul(ProofS)
+	t := HSk.Mul2(ProofS1, HRand, ProofS2)
 	t.Sub(Nym.Mul(ProofC))
 
 	// proofData is the data being hashed, it consists of:

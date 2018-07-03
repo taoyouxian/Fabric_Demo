@@ -8,8 +8,8 @@ package idemix
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric-amcl/amcl"
-	"github.com/hyperledger/fabric-amcl/amcl/FP256BN"
+	"github.com/milagro-crypto/amcl/version3/go/amcl"
+	"github.com/milagro-crypto/amcl/version3/go/amcl/FP256BN"
 	"github.com/pkg/errors"
 )
 
@@ -38,32 +38,32 @@ func NewIssuerKey(AttributeNames []string, rng *amcl.RAND) (*IssuerKey, error) {
 
 	// generate issuer secret key
 	ISk := RandModOrder(rng)
-	key.Isk = BigToBytes(ISk)
+	key.ISk = BigToBytes(ISk)
 
 	// generate the corresponding public key
-	key.Ipk = new(IssuerPublicKey)
-	key.Ipk.AttributeNames = AttributeNames
+	key.IPk = new(IssuerPublicKey)
+	key.IPk.AttributeNames = AttributeNames
 
 	W := GenG2.Mul(ISk)
-	key.Ipk.W = Ecp2ToProto(W)
+	key.IPk.W = Ecp2ToProto(W)
 
 	// generate bases that correspond to the attributes
-	key.Ipk.HAttrs = make([]*ECP, len(AttributeNames))
+	key.IPk.HAttrs = make([]*ECP, len(AttributeNames))
 	for i := 0; i < len(AttributeNames); i++ {
-		key.Ipk.HAttrs[i] = EcpToProto(GenG1.Mul(RandModOrder(rng)))
+		key.IPk.HAttrs[i] = EcpToProto(GenG1.Mul(RandModOrder(rng)))
 	}
 
 	HSk := GenG1.Mul(RandModOrder(rng))
-	key.Ipk.HSk = EcpToProto(HSk)
+	key.IPk.HSk = EcpToProto(HSk)
 
 	HRand := GenG1.Mul(RandModOrder(rng))
-	key.Ipk.HRand = EcpToProto(HRand)
+	key.IPk.HRand = EcpToProto(HRand)
 
 	BarG1 := GenG1.Mul(RandModOrder(rng))
-	key.Ipk.BarG1 = EcpToProto(BarG1)
+	key.IPk.BarG1 = EcpToProto(BarG1)
 
 	BarG2 := BarG1.Mul(ISk)
-	key.Ipk.BarG2 = EcpToProto(BarG2)
+	key.IPk.BarG2 = EcpToProto(BarG2)
 
 	// generate a zero-knowledge proof of knowledge (ZK PoK) of the secret key
 	r := RandModOrder(rng)
@@ -80,16 +80,16 @@ func NewIssuerKey(AttributeNames []string, rng *amcl.RAND) (*IssuerKey, error) {
 	index = appendBytesG1(proofData, index, BarG2)
 
 	proofC := HashModOrder(proofData)
-	key.Ipk.ProofC = BigToBytes(proofC)
+	key.IPk.ProofC = BigToBytes(proofC)
 
 	proofS := Modadd(FP256BN.Modmul(proofC, ISk, GroupOrder), r, GroupOrder)
-	key.Ipk.ProofS = BigToBytes(proofS)
+	key.IPk.ProofS = BigToBytes(proofS)
 
-	serializedIPk, err := proto.Marshal(key.Ipk)
+	serializedIPk, err := proto.Marshal(key.IPk)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal issuer public key")
 	}
-	key.Ipk.Hash = BigToBytes(HashModOrder(serializedIPk))
+	key.IPk.Hash = BigToBytes(HashModOrder(serializedIPk))
 
 	return key, nil
 }

@@ -129,9 +129,6 @@ func authConfigs(confs map[string]dockerConfig) (*AuthConfigurations, error) {
 		Configs: make(map[string]AuthConfiguration),
 	}
 	for reg, conf := range confs {
-		if conf.Auth == "" {
-			continue
-		}
 		data, err := base64.StdEncoding.DecodeString(conf.Auth)
 		if err != nil {
 			return nil, err
@@ -152,8 +149,8 @@ func authConfigs(confs map[string]dockerConfig) (*AuthConfigurations, error) {
 
 // AuthStatus returns the authentication status for Docker API versions >= 1.23.
 type AuthStatus struct {
-	Status        string `json:"Status,omitempty" yaml:"Status,omitempty" toml:"Status,omitempty"`
-	IdentityToken string `json:"IdentityToken,omitempty" yaml:"IdentityToken,omitempty" toml:"IdentityToken,omitempty"`
+	Status        string `json:"Status,omitempty" yaml:"Status,omitempty"`
+	IdentityToken string `json:"IdentityToken,omitempty" yaml:"IdentityToken,omitempty"`
 }
 
 // AuthCheck validates the given credentials. It returns nil if successful.
@@ -164,7 +161,7 @@ type AuthStatus struct {
 func (c *Client) AuthCheck(conf *AuthConfiguration) (AuthStatus, error) {
 	var authStatus AuthStatus
 	if conf == nil {
-		return authStatus, errors.New("conf is nil")
+		return authStatus, fmt.Errorf("conf is nil")
 	}
 	resp, err := c.do("POST", "/auth", doOptions{data: conf})
 	if err != nil {

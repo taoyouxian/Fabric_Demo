@@ -136,7 +136,7 @@ func (*rsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccs
 }
 
 type x509PublicKeyImportOptsKeyImporter struct {
-	bccsp *CSP
+	bccsp *impl
 }
 
 func (ki *x509PublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (k bccsp.Key, err error) {

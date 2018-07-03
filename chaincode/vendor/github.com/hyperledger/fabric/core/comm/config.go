@@ -10,17 +10,21 @@ import (
 	"crypto/tls"
 	"time"
 
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 )
 
-// Configuration defaults
 var (
+	// Is the configuration cached?
+	configurationCached = false
+	// Is TLS enabled
+	tlsEnabled bool
 	// Max send and receive bytes for grpc clients and servers
-	MaxRecvMsgSize = 100 * 1024 * 1024
-	MaxSendMsgSize = 100 * 1024 * 1024
+	maxRecvMsgSize = 100 * 1024 * 1024
+	maxSendMsgSize = 100 * 1024 * 1024
 	// Default peer keepalive options
-	DefaultKeepaliveOptions = &KeepaliveOptions{
+	keepaliveOptions = &KeepaliveOptions{
 		ClientInterval:    time.Duration(1) * time.Minute,  // 1 min
 		ClientTimeout:     time.Duration(20) * time.Second, // 20 sec - gRPC default
 		ServerInterval:    time.Duration(2) * time.Hour,    // 2 hours - gRPC default
@@ -28,7 +32,7 @@ var (
 		ServerMinInterval: time.Duration(1) * time.Minute,  // match ClientInterval
 	}
 	// strong TLS cipher suites
-	DefaultTLSCipherSuites = []uint16{
+	tlsCipherSuites = []uint16{
 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
@@ -36,15 +40,10 @@ var (
 		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 	}
-	// default connection timeout
-	DefaultConnectionTimeout = 5 * time.Second
 )
 
 // ServerConfig defines the parameters for configuring a GRPCServer instance
 type ServerConfig struct {
-	// ConnectionTimeout specifies the timeout for connection establishment
-	// for all new connections
-	ConnectionTimeout time.Duration
 	// SecOpts defines the security parameters
 	SecOpts *SecureOptions
 	// KaOpts defines the keepalive parameters
@@ -63,7 +62,7 @@ type ClientConfig struct {
 }
 
 // SecureOptions defines the security parameters (e.g. TLS) for a
-// GRPCServer or GRPCClient instance
+// GRPCServer instance
 type SecureOptions struct {
 	// PEM-encoded X509 public key to be used for TLS communication
 	Certificate []byte
@@ -83,7 +82,7 @@ type SecureOptions struct {
 	CipherSuites []uint16
 }
 
-// KeepaliveOptions is used to set the gRPC keepalive settings for both
+// KeepAliveOptions is used to set the gRPC keepalive settings for both
 // clients and servers
 type KeepaliveOptions struct {
 	// ClientInterval is the duration after which if the client does not see
@@ -103,12 +102,58 @@ type KeepaliveOptions struct {
 	ServerMinInterval time.Duration
 }
 
+// cacheConfiguration caches common package scoped variables
+func cacheConfiguration() {
+	if !configurationCached {
+		tlsEnabled = viper.GetBool("peer.tls.enabled")
+		configurationCached = true
+	}
+}
+
+// TLSEnabled return cached value for "peer.tls.enabled" configuration value
+func TLSEnabled() bool {
+	if !configurationCached {
+		cacheConfiguration()
+	}
+	return tlsEnabled
+}
+
+// MaxRecvMsgSize returns the maximum message size in bytes that gRPC clients
+// and servers can receive
+func MaxRecvMsgSize() int {
+	return maxRecvMsgSize
+}
+
+// SetMaxRecvMsgSize sets the maximum message size in bytes that gRPC clients
+// and servers can receive
+func SetMaxRecvMsgSize(size int) {
+	maxRecvMsgSize = size
+}
+
+// MaxSendMsgSize returns the maximum message size in bytes that gRPC clients
+// and servers can send
+func MaxSendMsgSize() int {
+	return maxSendMsgSize
+}
+
+// SetMaxSendMsgSize sets the maximum message size in bytes that gRPC clients
+// and servers can send
+func SetMaxSendMsgSize(size int) {
+	maxSendMsgSize = size
+}
+
+// DefaultKeepaliveOptions returns sane default keepalive settings for gRPC
+// servers and clients
+func DefaultKeepaliveOptions() *KeepaliveOptions {
+	return keepaliveOptions
+}
+
 // ServerKeepaliveOptions returns gRPC keepalive options for server.  If
 // opts is nil, the default keepalive options are returned
 func ServerKeepaliveOptions(ka *KeepaliveOptions) []grpc.ServerOption {
 	// use default keepalive options if nil
 	if ka == nil {
-		ka = DefaultKeepaliveOptions
+		ka = keepaliveOptions
 	}
 	var serverOpts []grpc.ServerOption
 	kap := keepalive.ServerParameters{
@@ -130,7 +175,7 @@ func ServerKeepaliveOptions(ka *KeepaliveOptions) []grpc.ServerOption {
 func ClientKeepaliveOptions(ka *KeepaliveOptions) []grpc.DialOption {
 	// use default keepalive options if nil
 	if ka == nil {
-		ka = DefaultKeepaliveOptions
+		ka = keepaliveOptions
 	}
 
 	var dialOpts []grpc.DialOption
