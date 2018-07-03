@@ -132,9 +132,9 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	res := strings.Split(value, "_")
 
-	fmt.Printf("Query Response:%s\n", res[0])
+	fmt.Printf("Query Response:%s\n", )
 
-	return shim.Success(res[0])
+	return shim.Success([]byte(res[0]))
 }
 
 

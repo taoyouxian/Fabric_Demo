@@ -48,5 +48,9 @@ Welcome to contribute and submit pull requests :)
 
 Our repository([Fabric_Demo](https://github.com/taoyouxian/Fabric_Demo.git)) is private currently. 
 
+# Q & A
+1. Fabric版本弄错，搭建了1.0的环境
+
 # Reference
-[相关参考](https://segmentfault.com/a/1190000013080245)
+
+
