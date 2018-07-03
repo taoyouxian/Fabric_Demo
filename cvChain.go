@@ -198,7 +198,7 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 }
 
 func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []string, decKey, IV []byte) sc.Response {
-	log.Printf("Func decRecord begin===== \n")
+	log.Println("Func decRecord begin===== \n")
 
 	if len(args) != 2 {
 		return shim.Error("Incorrect number of arguments. Expecting 2")
@@ -215,9 +215,27 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 		return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
 	}
 	log.Println(cleartextValue)
+	var dat map[string]interface{}
+	if err := json.Unmarshal([]byte(cleartextValue), &dat); err == nil {
+		log.Println(dat)
+	} else {
+		log.Println(err)
+	}
+	var value string
+	// Judge key is found or not
+	if v, ok := dat[args[1]]; ok {
+		value = v.(string)
+		log.Println("Key Found\t" + value)
+	} else {
+		log.Println("Key Not Found")
+	}
+
+	res := strings.Split(value, "_")
+
+	log.Printf("Query Response:%s\n", value)
 
 	// here we return the decrypted value as a result
-	return shim.Success(cleartextValue)
+	return shim.Success([]byte(res[0]))
 }
 
 func main() {
