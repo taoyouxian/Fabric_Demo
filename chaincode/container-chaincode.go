@@ -41,9 +41,17 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 	} else if function == "getRecord" {
 		return s.getRecord(APIstub,args)
 	} else if function == "encRecord" {
-		return s.encRecord(APIstub, args, key["ENCKEY"], key["IV"])
+		for key, value := range key {
+			log.Println("Key:", key, "Value:", value)
+		}
+
+		return s.encRecord(APIstub, args, key[ENCKEY], key[IV])
 	} else if function == "decRecord" {
-		return s.decRecord(APIstub, args, key["DECKEY"], key["IV"])
+		for key, value := range key {
+			log.Println("Key:", key, "Value:", value)
+		}
+
+		return s.decRecord(APIstub, args, key[DECKEY], key[IV])
 	}
 
 	return shim.Error("Invalid Smart Contract function name.")
@@ -132,20 +140,20 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	res := strings.Split(value, "_")
 
-	log.Printf("Query Response:%s\n", )
+	log.Printf("Query Response:%s\n", value)
 
 	return shim.Success([]byte(res[0]))
 }
 
 
-func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string, ENCKEY, IV []byte) sc.Response {
+func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string, encKey, IV []byte) sc.Response {
 	log.Printf("Func encRecord begin===== \n")
 
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
 
-	ent, err := entities.NewAES256EncrypterEntity("ID", s.bccspInst, ENCKEY, IV)
+	ent, err := entities.NewAES256EncrypterEntity("ID", s.bccspInst, encKey, IV)
 	if err != nil {
 		return shim.Error(fmt.Sprintf("entities.NewAES256EncrypterEntity failed, err %s", err))
 	}
@@ -198,14 +206,14 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 	return shim.Success(nil)
 }
 
-func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []string, DECKEY, IV []byte) sc.Response {
+func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []string, decKey, IV []byte) sc.Response {
 	log.Printf("Func decRecord begin===== \n")
 
 	if len(args) != 2 {
 		return shim.Error("Incorrect number of arguments. Expecting 2")
 	}
 
-	ent, err := entities.NewAES256EncrypterEntity("ID", s.bccspInst, DECKEY, IV)
+	ent, err := entities.NewAES256EncrypterEntity("ID", s.bccspInst, decKey, IV)
 
 	key := args[0]
 
