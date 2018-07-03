@@ -44,6 +44,7 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 		for key, value := range key {
 			log.Println("Key:", key, "Value:", value)
 		}
+		log.Println("Key1:", key[ENCKEY], "Value1:", key[IV])
 
 		return s.encRecord(APIstub, args, key[ENCKEY], key[IV])
 	} else if function == "decRecord" {
