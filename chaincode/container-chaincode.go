@@ -7,12 +7,11 @@ import (
 	_ "errors"
 	"strings"
 	"github.com/hyperledger/fabric/bccsp"
-	_ "github.com/hyperledger/fabric/bccsp/factory"
+	"github.com/hyperledger/fabric/bccsp/factory"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	"github.com/hyperledger/fabric/core/chaincode/shim/ext/entities"
 	sc "github.com/hyperledger/fabric/protos/peer"
 	"fmt"
-	"github.com/hyperledger/fabric/bccsp/factory"
 )
 const DECKEY = "DECKEY"
 const VERKEY = "VERKEY"
@@ -150,7 +149,7 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 		return shim.Error(fmt.Sprintf("entities.NewAES256EncrypterEntity failed, err %s", err))
 	}
 	var param string
-	containerAsBytes, _ := APIstub.GetState(args[0])
+	containerAsBytes, _ := getStateAndDecrypt(APIstub, ent, args[0])
 	if containerAsBytes == nil {
 		// If key not found
 		log.Println("Key Not Found, Add New Record")
