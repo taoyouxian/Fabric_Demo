@@ -2,16 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	_ "strconv"
 	_ "errors"
 	"strings"
-
 	"github.com/hyperledger/fabric/bccsp"
 	_ "github.com/hyperledger/fabric/bccsp/factory"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	"github.com/hyperledger/fabric/core/chaincode/shim/ext/entities"
 	sc "github.com/hyperledger/fabric/protos/peer"
+	"fmt"
 )
 const DECKEY = "DECKEY"
 const VERKEY = "VERKEY"
@@ -50,7 +50,7 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 }
 
 func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
-	fmt.Printf("Func addRecord begin===== \n")
+	log.Printf("Func addRecord begin===== \n")
 
 	var param string
 	if len(args) != 4 {
@@ -61,15 +61,15 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 	containerAsBytes, _ := APIstub.GetState(args[0])
 	if containerAsBytes == nil {
 		// If key not found
-		fmt.Println("Key Not Found, Add New Record")
+		log.Println("Key Not Found, Add New Record")
 		paramMap := make(map[string]interface{})
 		param += args[2] + "_" + args[3]
 		paramMap[args[1]] = param
 		str, err := json.Marshal(paramMap)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
-		fmt.Printf("addRecord Params:%s\n", string(str))
+		log.Printf("addRecord Params:%s\n", string(str))
 
 		err1:=APIstub.PutState(args[0], []byte(str))
 		if err1 != nil{
@@ -77,26 +77,26 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 		}
 	} else{
 		// If key found
-		fmt.Println("Key Found, Get Old Value")
+		log.Println("Key Found, Get Old Value")
 		var dat map[string]interface{}
 		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-			fmt.Println("Old Value: ")
-			fmt.Print(dat)
-			fmt.Println()
+			log.Println("Old Value: ")
+			log.Print(dat)
+			log.Println()
 			param += args[2] + "_" + args[3]
 			dat[args[1]] = param
 			str, err := json.Marshal(dat)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 			}
-			fmt.Printf("addRecord Params:%s\n", string(str))
+			log.Printf("addRecord Params:%s\n", string(str))
 
 			err1:=APIstub.PutState(args[0], []byte(str))
 			if err1 != nil{
 				return shim.Error("wirteIn error")
 			}
 		} else {
-			fmt.Println(err)
+			log.Println(err)
 		}
 
 	}
@@ -105,7 +105,7 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 }
 
 func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []string) sc.Response {
-	fmt.Printf("Func getRecord begin===== \n")
+	log.Printf("Func getRecord begin===== \n")
 
 	if len(args) != 2 {
 		return shim.Error("Incorrect number of arguments. Expecting 2")
@@ -117,29 +117,29 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 	}
 	var dat map[string]interface{}
 	if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-		fmt.Println(dat)
+		log.Println(dat)
 	} else {
-		fmt.Println(err)
+		log.Println(err)
 	}
 	var value string
 	// Judge key is found or not
 	if v, ok := dat[args[1]]; ok {
 		value = v.(string)
-		fmt.Println("Key Found\t" + value)
+		log.Println("Key Found\t" + value)
 	} else {
-		fmt.Println("Key Not Found")
+		log.Println("Key Not Found")
 	}
 
 	res := strings.Split(value, "_")
 
-	fmt.Printf("Query Response:%s\n", )
+	log.Printf("Query Response:%s\n", )
 
 	return shim.Success([]byte(res[0]))
 }
 
 
 func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string, ENCKEY, IV []byte) sc.Response {
-	fmt.Printf("Func encRecord begin===== \n")
+	log.Printf("Func encRecord begin===== \n")
 
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
@@ -153,15 +153,15 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 	containerAsBytes, _ := APIstub.GetState(args[0])
 	if containerAsBytes == nil {
 		// If key not found
-		fmt.Println("Key Not Found, Add New Record")
+		log.Println("Key Not Found, Add New Record")
 		paramMap := make(map[string]interface{})
 		param += args[2] + "_" + args[3]
 		paramMap[args[1]] = param
 		str, err := json.Marshal(paramMap)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
-		fmt.Printf("addRecord Params:%s\n", string(str))
+		log.Printf("addRecord Params:%s\n", string(str))
 
 		// here, we encrypt Value and assign it to key
 		err = encryptAndPutState(APIstub, ent, args[0], []byte(str))
@@ -171,26 +171,26 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	} else {
 		// If key found
-		fmt.Println("Key Found, Get Old Value")
+		log.Println("Key Found, Get Old Value")
 		var dat map[string]interface{}
 		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-			fmt.Println("Old Value: ")
-			fmt.Print(dat)
-			fmt.Println()
+			log.Println("Old Value: ")
+			log.Print(dat)
+			log.Println()
 			param += args[2] + "_" + args[3]
 			dat[args[1]] = param
 			str, err := json.Marshal(dat)
 			if err != nil {
-				fmt.Println(err)
+				log.Println(err)
 			}
-			fmt.Printf("addRecord Params:%s\n", string(str))
+			log.Printf("addRecord Params:%s\n", string(str))
 
 			err = encryptAndPutState(APIstub, ent, args[0], []byte(str))
 			if err != nil {
 				return shim.Error(fmt.Sprintf("encryptAndPutState failed, err %+v", err))
 			}
 		} else {
-			fmt.Println(err)
+			log.Println(err)
 		}
 
 	}
@@ -199,7 +199,7 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 }
 
 func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []string, DECKEY, IV []byte) sc.Response {
-	fmt.Printf("Func decRecord begin===== \n")
+	log.Printf("Func decRecord begin===== \n")
 
 	if len(args) != 2 {
 		return shim.Error("Incorrect number of arguments. Expecting 2")
@@ -215,7 +215,7 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 	if err != nil {
 		return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
 	}
-	fmt.Println(cleartextValue)
+	log.Println(cleartextValue)
 
 	// here we return the decrypted value as a result
 	return shim.Success(cleartextValue)
@@ -224,6 +224,6 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 func main() {
 	err := shim.Start(new(SmartContract))
 	if err != nil {
-		fmt.Printf("Error creating new Smart Contract: %s", err)
+		log.Printf("Error creating new Smart Contract: %s", err)
 	}
 }
