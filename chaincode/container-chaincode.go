@@ -7,12 +7,11 @@ import (
 	_ "errors"
 	"strings"
 	"github.com/hyperledger/fabric/bccsp"
-	_ "github.com/hyperledger/fabric/bccsp/factory"
+	"github.com/hyperledger/fabric/bccsp/factory"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	"github.com/hyperledger/fabric/core/chaincode/shim/ext/entities"
 	sc "github.com/hyperledger/fabric/protos/peer"
 	"fmt"
-	"github.com/hyperledger/fabric/bccsp/factory"
 )
 const DECKEY = "DECKEY"
 const VERKEY = "VERKEY"
