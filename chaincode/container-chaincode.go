@@ -12,6 +12,7 @@ import (
 	"github.com/hyperledger/fabric/core/chaincode/shim/ext/entities"
 	sc "github.com/hyperledger/fabric/protos/peer"
 	"fmt"
+	"github.com/hyperledger/fabric/bccsp/factory"
 )
 const DECKEY = "DECKEY"
 const VERKEY = "VERKEY"
@@ -41,17 +42,8 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 	} else if function == "getRecord" {
 		return s.getRecord(APIstub,args)
 	} else if function == "encRecord" {
-		for key, value := range key {
-			log.Println("Key:", key, "Value:", value)
-		}
-		log.Println("Key1:", key[ENCKEY], "Value1:", key[IV])
-
 		return s.encRecord(APIstub, args, key[ENCKEY], key[IV])
 	} else if function == "decRecord" {
-		for key, value := range key {
-			log.Println("Key:", key, "Value:", value)
-		}
-
 		return s.decRecord(APIstub, args, key[DECKEY], key[IV])
 	}
 
@@ -65,7 +57,6 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
-
 
 	containerAsBytes, _ := APIstub.GetState(args[0])
 	if containerAsBytes == nil {
@@ -231,7 +222,10 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 }
 
 func main() {
-	err := shim.Start(new(SmartContract))
+	factory.InitFactories(nil)
+	err := shim.Start(&SmartContract{factory.GetDefault()})
+
+	//err := shim.Start(new(SmartContract))
 	if err != nil {
 		log.Printf("Error creating new Smart Contract: %s", err)
 	}
