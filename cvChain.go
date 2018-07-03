@@ -82,6 +82,15 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 			log.Println("Old Value: ")
 			log.Print(dat)
 			log.Println()
+			var value string
+			if v, ok := dat[args[1]]; ok {
+				value = v.(string)
+				log.Println("Key Found\t" + value)
+				return shim.Error("wirteIn same year error\t" + value)
+			} else {
+				log.Println("Key Not Found")
+			}
+
 			param += args[2] + "_" + args[3]
 			dat[args[1]] = param
 			str, err := json.Marshal(dat)
@@ -176,6 +185,14 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 			log.Println("Old Value: ")
 			log.Print(dat)
 			log.Println()
+			var value string
+			if v, ok := dat[args[1]]; ok {
+				value = v.(string)
+				log.Println("Key Found\t" + value)
+				return shim.Error("wirteIn same year error\t" + value)
+			} else {
+				log.Println("Key Not Found")
+			}
 			param += args[2] + "_" + args[3]
 			dat[args[1]] = param
 			str, err := json.Marshal(dat)
@@ -210,7 +227,6 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	// here we decrypt the state associated to key
 	cleartextValue, err := getStateAndDecrypt(APIstub, ent, key)
-	// 这里需要循环判断输出与输入年份一致的信息
 	if err != nil {
 		return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
 	}
@@ -233,8 +249,6 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 	res := strings.Split(value, "_")
 
 	log.Printf("Query Response:%s\n", value)
-
-	// here we return the decrypted value as a result
 	return shim.Success([]byte(res[0]))
 }
 
