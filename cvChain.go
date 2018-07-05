@@ -57,8 +57,10 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
+	ID := args[0]
+	log.Printf("- start getHistoryForKey: %s", ID)
 
-	resultsIterator, err := APIstub.GetHistoryForKey(args[0])
+	resultsIterator, err := APIstub.GetHistoryForKey(ID)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
@@ -69,10 +71,7 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-		var containerAsBytes string
-		containerAsBytes = response.Value
-		log.Println("resultsIterator \t" + containerAsBytes)
-		if containerAsBytes == nil {
+		if response == nil {
 			// If key not found
 			log.Println("Key Not Found, Add New Record")
 			paramMap := make(map[string]interface{})
@@ -91,6 +90,9 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 			break
 		} else {
+			var containerAsBytes string
+			containerAsBytes = string(response.Value)
+			log.Println("resultsIterator \t" + containerAsBytes)
 			// If key found
 			log.Println("Key Found, Get Old Value")
 			var dat map[string]interface{}
@@ -115,8 +117,8 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 		}
 	}
 
-	var dat map[string]interface{}
-	param += args[2] + "_" + args[3]
+	dat := make(map[string]interface{})
+	param = args[2] + "_" + args[3]
 	dat[args[1]] = param
 	str, err := json.Marshal(dat)
 	if err != nil {
@@ -151,7 +153,7 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 			return shim.Error(err.Error())
 		}
 		var containerAsBytes string
-		containerAsBytes = response.Value
+		containerAsBytes = string(response.Value)
 		log.Println("resultsIterator \t" + containerAsBytes)
 
 		var dat map[string]interface{}
@@ -163,8 +165,8 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 		// Judge key is found or not
 		if v, ok := dat[args[1]]; ok {
 			value = v.(string)
-			log.Println("Key Found\t" + value)
-			log.Printf("Query Response:%s\n", value)
+			log.Println("getRecord Key Found\t" + value)
+			log.Printf("getRecord Query Response:%s\n", value)
 			break
 		} else {
 			log.Println("Key Not Found")
@@ -178,6 +180,7 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string, encKey, IV []byte) sc.Response {
 	log.Printf("Func encRecord begin===== \n")
 
+	var param string
 	if len(args) != 4 {
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
@@ -186,58 +189,85 @@ func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []st
 	if err != nil {
 		return shim.Error(fmt.Sprintf("entities.NewAES256EncrypterEntity failed, err %s", err))
 	}
-	var param string
-	containerAsBytes, _ := getStateAndDecrypt(APIstub, ent, args[0])
-	if containerAsBytes == nil {
-		// If key not found
-		log.Println("Key Not Found, Add New Record")
-		paramMap := make(map[string]interface{})
-		param += args[2] + "_" + args[3]
-		paramMap[args[1]] = param
-		str, err := json.Marshal(paramMap)
-		if err != nil {
-			log.Println(err)
-		}
-		log.Printf("addRecord Params:%s\n", string(str))
 
-		// here, we encrypt Value and assign it to key
-		err = encryptAndPutState(APIstub, ent, args[0], []byte(str))
-		if err != nil {
-			return shim.Error(fmt.Sprintf("encryptAndPutState failed, err %+v", err))
-		}
+	ID := args[0]
+	log.Printf("- start getHistoryForKey: %s", ID)
 
-	} else {
-		// If key found
-		log.Println("Key Found, Get Old Value")
-		var dat map[string]interface{}
-		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-			log.Println("Old Value: ")
-			log.Print(dat)
-			log.Println()
-			var value string
-			if v, ok := dat[args[1]]; ok {
-				value = v.(string)
-				log.Println("Key Found\t" + value)
-				return shim.Error("wirteIn same year error\t" + value)
-			} else {
-				log.Println("Key Not Found")
-			}
+	resultsIterator, err := APIstub.GetHistoryForKey(ID)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	defer resultsIterator.Close()
+
+	for resultsIterator.HasNext() {
+		response, err := resultsIterator.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+		if response == nil {
+			// If key not found
+			log.Println("Key Not Found, Add New Record")
+			paramMap := make(map[string]interface{})
 			param += args[2] + "_" + args[3]
-			dat[args[1]] = param
-			str, err := json.Marshal(dat)
+			paramMap[args[1]] = param
+			str, err := json.Marshal(paramMap)
 			if err != nil {
 				log.Println(err)
 			}
 			log.Printf("addRecord Params:%s\n", string(str))
 
+			// here, we encrypt Value and assign it to key
 			err = encryptAndPutState(APIstub, ent, args[0], []byte(str))
 			if err != nil {
 				return shim.Error(fmt.Sprintf("encryptAndPutState failed, err %+v", err))
 			}
-		} else {
-			log.Println(err)
-		}
 
+			break
+		} else {
+			var containerAsBytes string
+			containerAsBytes = string(response.Value)
+			log.Println("resultsIterator \t" + containerAsBytes)
+			cleartextValue, err := ent.Decrypt(response.Value)
+			if err != nil {
+				return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
+			}
+			log.Println("resultsIterator \t" + string(cleartextValue))
+			// If key found
+			log.Println("Key Found, Get Old Value")
+			var dat map[string]interface{}
+			if err := json.Unmarshal([]byte(cleartextValue), &dat); err == nil {
+				log.Println("Old Value: ")
+				log.Print(dat)
+				log.Println()
+				var value string
+				if v, ok := dat[args[1]]; ok {
+					value = v.(string)
+					log.Println("Key Found\t" + value)
+					return shim.Error("wirteIn same year error\t" + value)
+				} else {
+					log.Println("Key Not Found")
+				}
+
+				break
+			} else {
+				log.Println(err)
+			}
+
+		}
+	}
+
+	dat := make(map[string]interface{})
+	param = args[2] + "_" + args[3]
+	dat[args[1]] = param
+	str, err := json.Marshal(dat)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("addRecord Params:%s\n", string(str))
+
+	err = encryptAndPutState(APIstub, ent, args[0], []byte(str))
+	if err != nil {
+		return shim.Error(fmt.Sprintf("encryptAndPutState failed, err %+v", err))
 	}
 
 	return shim.Success(nil)
@@ -252,32 +282,50 @@ func (s *SmartContract) decRecord(APIstub shim.ChaincodeStubInterface, args []st
 
 	ent, err := entities.NewAES256EncrypterEntity("ID", s.bccspInst, decKey, IV)
 
-	key := args[0]
+	ID := args[0]
 
-	// here we decrypt the state associated to key
-	cleartextValue, err := getStateAndDecrypt(APIstub, ent, key)
+	resultsIterator, err := APIstub.GetHistoryForKey(ID)
 	if err != nil {
-		return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
+		return shim.Error(err.Error())
 	}
-	log.Println(cleartextValue)
-	var dat map[string]interface{}
-	if err := json.Unmarshal([]byte(cleartextValue), &dat); err == nil {
-		log.Println(dat)
-	} else {
-		log.Println(err)
-	}
-	var value string
-	// Judge key is found or not
-	if v, ok := dat[args[1]]; ok {
-		value = v.(string)
-		log.Println("Key Found\t" + value)
-	} else {
-		log.Println("Key Not Found")
-	}
+	defer resultsIterator.Close()
 
+	var value string
+	for resultsIterator.HasNext() {
+		response, err := resultsIterator.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+
+		var containerAsBytes string
+		containerAsBytes = string(response.Value)
+		log.Println("resultsIterator \t" + containerAsBytes)
+
+		cleartextValue, err := ent.Decrypt(response.Value)
+		if err != nil {
+			return shim.Error(fmt.Sprintf("getStateAndDecrypt failed, err %+v", err))
+		}
+		log.Println(cleartextValue)
+
+		var dat map[string]interface{}
+		if err := json.Unmarshal([]byte(cleartextValue), &dat); err == nil {
+			log.Println(dat)
+		} else {
+			log.Println(err)
+		}
+		// Judge key is found or not
+		if v, ok := dat[args[1]]; ok {
+			value = v.(string)
+			log.Println("decRecord Key Found\t" + value)
+			log.Printf("Query Response:%s\n", value)
+			break
+		} else {
+			log.Println("decRecord Key Not Found")
+		}
+
+	}
 	res := strings.Split(value, "_")
 
-	log.Printf("Query Response:%s\n", value)
 	return shim.Success([]byte(res[0]))
 }
 
