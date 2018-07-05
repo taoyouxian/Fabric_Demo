@@ -2,49 +2,66 @@
 Coding happily.
 
 ## Intro 
-`人工链圈`
+`人工链圈` - **Artificial chain**
 
 ## Run release-1.1
-docker-compose -f docker-compose-cli.yaml up
-
-docker cp Fabric_Demo ContainerID:/opt/gopath/src/github.com/
-
-docker exec -it cli bash
-
-- this installs the Go chaincode
-    - self-defined
+### Start the network(In Terminal)
 ```
+/home/tao/software/opt/Go/src/github.com/hyperledger/fabric-samples/
+docker-compose -f docker-compose-cli.yaml up -d
+```
+- this copys the chaincode dir
+```
+cd /home/tao/software/opt/Go/src/
+docker cp cvChain 49f92f126b1d:/opt/gopath/src/github.com/
+```
+
+### Start the network(In Docker)
+- this sets configuration
+```
+docker exec -it cli bash
+export CHANNEL_NAME=mychannel
+export NAME=cc
 export ENCKEY=`openssl rand 32 -base64` && DECKEY=$ENCKEY
 export IV=`openssl rand 16 -base64`
-peer chaincode install -n t6 -v 1.0 -p github.com/Fabric_Demo/
-peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C $CHANNEL_NAME -n t6 -v 1.0 -c '{"Args":["init",""]}' -P "OR ('Org1MSP.peer','Org2MSP.peer')"
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["addRecord","2018","2018","college1","bachelor"]}'
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["addRecord","2018","2019","college2","bachelor2"]}'
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["addRecord","2018","2018","college3","bachelor3"]}'
-peer chaincode query -C $CHANNEL_NAME -n t6 -c '{"Args":["getRecord","2018", "2019"]}'
-
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["encRecord","2017","2017","college1","bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["encRecord","2015","2016","college1","bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["encRecord","2017","2018","college2","bachelor2"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n t6 -c '{"Args":["encRecord","2017","2017","college1","bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
-peer chaincode invoke -C $CHANNEL_NAME -n t6 -c '{"Args":["encRecord","2017","2018","1","2"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}" 
-
-peer chaincode query -C $CHANNEL_NAME -n t6 -c '{"Args":["decRecord", "2017", "2017"]}' --transient "{\"DECKEY\":\"$DECKEY\"}"
-peer chaincode query -C $CHANNEL_NAME -n t6 -c '{"Args":["decRecord", "2017", "2018"]}' --transient "{\"DECKEY\":\"$DECKEY\"}"
 ```
-
-    - official
+- Create & Join Channel
 ```
-export CHANNEL_NAME=mychannel
+peer channel create -o orderer.example.com:7050 -c $CHANNEL_NAME -f ./channel-artifacts/channel.tx --tls $CORE_PEER_TLS_ENABLED --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
+```
+- Install & Instantiate Chaincode
+```
+peer chaincode install -n $NAME -v 1.0 -p github.com/cvChain/
+peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C $CHANNEL_NAME -n $NAME -v 1.0 -c '{"Args":["init",""]}' -P "OR ('Org1MSP.peer','Org2MSP.peer')"
+```
+- Invoke & Query
 
-peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C $CHANNEL_NAME -n mycc -v 1.0 -c '{"Args":["init","a", "100", "b","200"]}' -P "OR ('Org1MSP.peer','Org2MSP.peer')"
-peer chaincode install -n mycc -v 1.0 -p github.com/chaincode/chaincode_example02/go/
-peer chaincode query -C $CHANNEL_NAME -n mycc -c '{"Args":["query","a"]}'
-peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n mycc -c '{"Args":["invoke","a","b","10"]}'
-peer chaincode query -C $CHANNEL_NAME -n mycc -c '{"Args":["query","a"]}'
-
-peer chaincode install -n myc -v 1.0 -p github.com/chaincode/chaincode_example02/go/
-peer chaincode instantiate -o orderer.example.com:7050 --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem -C $CHANNEL_NAME -n myc -v 1.0 -c '{"Args":["init","a", "100", "b","200"]}' -P "OR ('Org1MSP.peer','Org2MSP.peer')"
+**`addRecord`**
+```
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["addRecord","2018","2018","college1","bachelor"]}'
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["addRecord","2018","2019","college2","bachelor2"]}'
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["addRecord","2018","2018","college3","bachelor3"]}'
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["addRecord","2017","2018","ruc","ruc_bachelor2"]}'
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["addRecord","1","2","ruc12","ruc12_bachelor2"]}'
+```
+**`getRecord`**
+```
+peer chaincode query -C $CHANNEL_NAME -n $NAME -c '{"Args":["getRecord","2018", "2019"]}'
+peer chaincode query -C $CHANNEL_NAME -n $NAME -c '{"Args":["getRecord","2018", "2020"]}'
+peer chaincode query -C $CHANNEL_NAME -n $NAME -c '{"Args":["getRecord","2017", "2018"]}'
+```
+**`encRecord`**
+```
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["encRecord","2017","2017","college1","bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["encRecord","2015","2016","college1","bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["encRecord","2017","2018","college2","bachelor2"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["encRecord","2017","2017","college1","bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
+peer chaincode invoke -o orderer.example.com:7050  --tls --cafile /opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem  -C $CHANNEL_NAME -n $NAME -c '{"Args":["encRecord","1","1","ruc1","ruc1bachelor"]}' --transient "{\"ENCKEY\":\"$ENCKEY\",\"IV\":\"$IV\"}"
+```
+**`decRecord`**
+```
+peer chaincode query -C $CHANNEL_NAME -n $NAME -c '{"Args":["decRecord", "2017", "2017"]}' --transient "{\"DECKEY\":\"$DECKEY\"}"
+peer chaincode query -C $CHANNEL_NAME -n $NAME -c '{"Args":["decRecord", "2017", "2018"]}' --transient "{\"DECKEY\":\"$DECKEY\"}"
 ```
 
 ## Run release-1.0
@@ -93,6 +110,14 @@ Our repository([Fabric_Demo](https://github.com/taoyouxian/Fabric_Demo.git)) is 
 
 ## Q & A
 1. Fabric版本弄错，搭建了1.0的环境
+2. `Building Your First Network`失败操作
+```
+./byfn.sh -m down
+docker network prune
+service docker  restart
+./byfn.sh -m generate
+./byfn.sh -m up
+```
 
 ## Reference
 
