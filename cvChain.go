@@ -13,6 +13,7 @@ import (
 	sc "github.com/hyperledger/fabric/protos/peer"
 	"fmt"
 )
+
 const DECKEY = "DECKEY"
 const VERKEY = "VERKEY"
 const ENCKEY = "ENCKEY"
@@ -39,7 +40,7 @@ func (s *SmartContract) Invoke(APIstub shim.ChaincodeStubInterface) sc.Response 
 	if function == "addRecord" {
 		return s.addRecord(APIstub, args)
 	} else if function == "getRecord" {
-		return s.getRecord(APIstub,args)
+		return s.getRecord(APIstub, args)
 	} else if function == "encRecord" {
 		return s.encRecord(APIstub, args, key[ENCKEY], key[IV])
 	} else if function == "decRecord" {
@@ -57,58 +58,76 @@ func (s *SmartContract) addRecord(APIstub shim.ChaincodeStubInterface, args []st
 		return shim.Error("Incorrect number of arguments. Expecting 4")
 	}
 
-	containerAsBytes, _ := APIstub.GetState(args[0])
-	if containerAsBytes == nil {
-		// If key not found
-		log.Println("Key Not Found, Add New Record")
-		paramMap := make(map[string]interface{})
-		param += args[2] + "_" + args[3]
-		paramMap[args[1]] = param
-		str, err := json.Marshal(paramMap)
+	resultsIterator, err := APIstub.GetHistoryForKey(args[0])
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	defer resultsIterator.Close()
+
+	for resultsIterator.HasNext() {
+		response, err := resultsIterator.Next()
 		if err != nil {
-			log.Println(err)
+			return shim.Error(err.Error())
 		}
-		log.Printf("addRecord Params:%s\n", string(str))
-
-		err1:=APIstub.PutState(args[0], []byte(str))
-		if err1 != nil{
-			return shim.Error("wirteIn error")
-		}
-	} else{
-		// If key found
-		log.Println("Key Found, Get Old Value")
-		var dat map[string]interface{}
-		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-			log.Println("Old Value: ")
-			log.Print(dat)
-			log.Println()
-			var value string
-			if v, ok := dat[args[1]]; ok {
-				value = v.(string)
-				log.Println("Key Found\t" + value)
-				return shim.Error("wirteIn same year error\t" + value)
-			} else {
-				log.Println("Key Not Found")
-			}
-
+		var containerAsBytes string
+		containerAsBytes = response.Value
+		log.Println("resultsIterator \t" + containerAsBytes)
+		if containerAsBytes == nil {
+			// If key not found
+			log.Println("Key Not Found, Add New Record")
+			paramMap := make(map[string]interface{})
 			param += args[2] + "_" + args[3]
-			dat[args[1]] = param
-			str, err := json.Marshal(dat)
+			paramMap[args[1]] = param
+			str, err := json.Marshal(paramMap)
 			if err != nil {
 				log.Println(err)
 			}
 			log.Printf("addRecord Params:%s\n", string(str))
 
-			err1:=APIstub.PutState(args[0], []byte(str))
-			if err1 != nil{
+			err1 := APIstub.PutState(args[0], []byte(str))
+			if err1 != nil {
 				return shim.Error("wirteIn error")
 			}
-		} else {
-			log.Println(err)
-		}
 
+			break
+		} else {
+			// If key found
+			log.Println("Key Found, Get Old Value")
+			var dat map[string]interface{}
+			if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
+				log.Println("Old Value: ")
+				log.Print(dat)
+				log.Println()
+				var value string
+				if v, ok := dat[args[1]]; ok {
+					value = v.(string)
+					log.Println("Key Found\t" + value)
+					return shim.Error("wirteIn same year error\t" + value)
+				} else {
+					log.Println("Key Not Found")
+				}
+
+				break
+			} else {
+				log.Println(err)
+			}
+
+		}
 	}
 
+	var dat map[string]interface{}
+	param += args[2] + "_" + args[3]
+	dat[args[1]] = param
+	str, err := json.Marshal(dat)
+	if err != nil {
+		log.Println(err)
+	}
+	log.Printf("addRecord Params:%s\n", string(str))
+
+	err1 := APIstub.PutState(args[0], []byte(str))
+	if err1 != nil {
+		return shim.Error("wirteIn error")
+	}
 	return shim.Success(nil)
 }
 
@@ -119,32 +138,42 @@ func (s *SmartContract) getRecord(APIstub shim.ChaincodeStubInterface, args []st
 		return shim.Error("Incorrect number of arguments. Expecting 2")
 	}
 
-	containerAsBytes, _ := APIstub.GetState(args[0])
-	if containerAsBytes == nil {
-		return shim.Error("getRecord === Could not locate container")
+	resultsIterator, err := APIstub.GetHistoryForKey(args[0])
+	if err != nil {
+		return shim.Error(err.Error())
 	}
-	var dat map[string]interface{}
-	if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
-		log.Println(dat)
-	} else {
-		log.Println(err)
-	}
+	defer resultsIterator.Close()
+
 	var value string
-	// Judge key is found or not
-	if v, ok := dat[args[1]]; ok {
-		value = v.(string)
-		log.Println("Key Found\t" + value)
-	} else {
-		log.Println("Key Not Found")
+	for resultsIterator.HasNext() {
+		response, err := resultsIterator.Next()
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+		var containerAsBytes string
+		containerAsBytes = response.Value
+		log.Println("resultsIterator \t" + containerAsBytes)
+
+		var dat map[string]interface{}
+		if err := json.Unmarshal([]byte(containerAsBytes), &dat); err == nil {
+			log.Println(dat)
+		} else {
+			log.Println(err)
+		}
+		// Judge key is found or not
+		if v, ok := dat[args[1]]; ok {
+			value = v.(string)
+			log.Println("Key Found\t" + value)
+			log.Printf("Query Response:%s\n", value)
+			break
+		} else {
+			log.Println("Key Not Found")
+		}
 	}
-
 	res := strings.Split(value, "_")
-
-	log.Printf("Query Response:%s\n", value)
-
 	return shim.Success([]byte(res[0]))
-}
 
+}
 
 func (s *SmartContract) encRecord(APIstub shim.ChaincodeStubInterface, args []string, encKey, IV []byte) sc.Response {
 	log.Printf("Func encRecord begin===== \n")
